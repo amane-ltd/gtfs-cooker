@@ -46,13 +46,13 @@ export function PropertyPicker() {
             <div className="field-label" style={{ marginBottom: 4 }}>
               {layer}
               <button
-                style={{ marginLeft: 8, fontSize: 11, cursor: 'pointer', border: 'none', background: 'none', color: 'var(--color-primary)' }}
+                style={{ marginLeft: 8, fontSize: 10, cursor: 'pointer', border: 'none', background: 'none', color: 'var(--color-accent)' }}
                 onClick={() => setSelectedProperties(layer, [...available])}
               >
                 {t('props.selectAll')}
               </button>
               <button
-                style={{ marginLeft: 4, fontSize: 11, cursor: 'pointer', border: 'none', background: 'none', color: 'var(--color-primary)' }}
+                style={{ marginLeft: 4, fontSize: 10, cursor: 'pointer', border: 'none', background: 'none', color: 'var(--color-accent)' }}
                 onClick={() => setSelectedProperties(layer, [])}
               >
                 {t('props.clearAll')}
@@ -72,7 +72,7 @@ export function PropertyPicker() {
                         setSelectedProperties(layer, next);
                       }}
                     />
-                    <span style={{ fontSize: 12 }}>{prop}</span>
+                    <span style={{ fontSize: 10 }}>{prop}</span>
                   </label>
                 ))}
               </div>

@@ -52,7 +52,7 @@ export function DropZone() {
           }}
         />
         <div>{t('drop.drag')}</div>
-        <div style={{ fontSize: 12, marginTop: 4 }}>{t('drop.click')}</div>
+        <div style={{ fontSize: 10, marginTop: 4 }}>{t('drop.click')}</div>
       </div>
 
       <div className="url-input-group" style={{ marginTop: 10 }}>

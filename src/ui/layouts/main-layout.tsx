@@ -54,8 +54,8 @@ export function MainLayout() {
                 onClick={() => setLanguage(language === 'en' ? 'ja' : 'en')}
                 title={language === 'en' ? 'Japanese' : 'English'}
               >
-                <span className="material-symbols-outlined" style={{ fontSize: 20 }}>language</span>
-                <span style={{ fontSize: 11, fontWeight: 600 }}>{language.toUpperCase()}</span>
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>language</span>
+                <span style={{ fontSize: 10, fontWeight: 500 }}>{language.toUpperCase()}</span>
               </button>
               <button className="sidebar-toggle" onClick={() => setSidebarOpen(false)}>
                 <span className="material-symbols-outlined">chevron_left</span>
