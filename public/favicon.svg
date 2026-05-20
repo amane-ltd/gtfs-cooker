@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- pot body -->
+  <rect x="5" y="14" width="22" height="12" rx="3" fill="#1a73e8"/>
+  <!-- pot rim -->
+  <rect x="3" y="12" width="26" height="3" rx="1.5" fill="#1557b0"/>
+  <!-- handles -->
+  <rect x="1" y="15" width="4" height="2" rx="1" fill="#1557b0"/>
+  <rect x="27" y="15" width="4" height="2" rx="1" fill="#1557b0"/>
+  <!-- steam / map pin -->
+  <path d="M16 2 c-3 0-5 2.2-5 5 c0 3.5 5 7 5 7 s5-3.5 5-7 c0-2.8-2-5-5-5z" fill="#e74c3c"/>
+  <circle cx="16" cy="7" r="2" fill="#fff"/>
+</svg>

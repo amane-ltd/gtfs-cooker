@@ -1,0 +1,32 @@
+{
+  "name": "gtfs-cooker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@duckdb/duckdb-wasm": "^1.29.0",
+    "@turf/bbox": "^7.3.5",
+    "@turf/helpers": "^7.1.0",
+    "@turf/truncate": "^7.1.0",
+    "jszip": "^3.10.1",
+    "maplibre-gl": "^4.7.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-map-gl": "^7.1.8",
+    "xlsx": "^0.18.5",
+    "zustand": "^5.0.5"
+  },
+  "devDependencies": {
+    "@types/geojson": "^7946.0.16",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.4.1",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5"
+  }
+}

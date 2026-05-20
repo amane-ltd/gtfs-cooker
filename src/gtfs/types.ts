@@ -1,0 +1,103 @@
+export type LayerType = 'stops' | 'lines' | 'trips';
+
+export interface GtfsSummary {
+  agencyNames: string[];
+  routeCount: number;
+  stopCount: number;
+  tripCount: number;
+  hasShapes: boolean;
+  hasCalendar: boolean;
+  hasCalendarDates: boolean;
+  loadedFiles: string[];
+}
+
+export interface ValidationResult {
+  level: 'error' | 'warning' | 'info';
+  message: string;
+  file?: string;
+}
+
+export interface LogEntry {
+  timestamp: number;
+  level: 'info' | 'warn' | 'error';
+  message: string;
+}
+
+export const GTFS_REQUIRED_FILES = [
+  'agency.txt', 'routes.txt', 'trips.txt', 'stop_times.txt',
+] as const;
+
+export const GTFS_CONDITIONALLY_REQUIRED_FILES = [
+  'stops.txt',
+  'calendar.txt', 'calendar_dates.txt',
+  'feed_info.txt',
+] as const;
+
+export const GTFS_OPTIONAL_FILES = [
+  'shapes.txt',
+  'fare_attributes.txt', 'fare_rules.txt', 'frequencies.txt',
+  'transfers.txt',
+  'translations.txt', 'attributions.txt', 'levels.txt', 'pathways.txt',
+  'areas.txt', 'stop_areas.txt',
+  'networks.txt', 'route_networks.txt',
+  'timeframes.txt', 'rider_categories.txt', 'fare_media.txt',
+  'fare_products.txt', 'fare_leg_rules.txt', 'fare_leg_join_rules.txt',
+  'fare_transfer_rules.txt',
+  'location_groups.txt', 'location_group_stops.txt',
+  'locations.geojson', 'booking_rules.txt',
+] as const;
+
+export const GTFS_JP_FILES = [
+  'agency_jp.txt', 'routes_jp.txt', 'office_jp.txt',
+] as const;
+
+export const STOPS_DEFAULT_PROPERTIES = [
+  'stop_id', 'stop_code', 'stop_name', 'stop_lat', 'stop_lon',
+  'location_type', 'parent_station', 'platform_code',
+  'zone_id', 'wheelchair_boarding', 'stop_url', 'stop_desc',
+] as const;
+
+export const STOPS_JOIN_PROPERTIES = [
+  'routes', 'agency_name', 'route_count',
+  'trip_count_weekday', 'trip_count_holiday',
+  'trips_04', 'trips_05', 'trips_06', 'trips_07', 'trips_08', 'trips_09',
+  'trips_10', 'trips_11', 'trips_12', 'trips_13', 'trips_14', 'trips_15',
+  'trips_16', 'trips_17', 'trips_18', 'trips_19', 'trips_20', 'trips_21',
+  'trips_22', 'trips_23', 'trips_24', 'trips_25', 'trips_26', 'trips_27',
+  'trips_morning', 'trips_daytime', 'trips_evening', 'trips_latenight',
+] as const;
+
+export const LINES_DEFAULT_PROPERTIES = [
+  'route_id', 'route_short_name', 'route_long_name',
+  'route_type', 'route_color', 'route_text_color',
+  'route_url', 'route_desc', 'agency_id', 'agency_name',
+] as const;
+
+export const LINES_JOIN_PROPERTIES = ['trip_count_weekday', 'trip_count_holiday'] as const;
+
+export const TRIPS_DEFAULT_PROPERTIES = [
+  'trip_id', 'route_id', 'service_id',
+  'route_short_name', 'route_long_name',
+  'route_type', 'route_color',
+  'direction_id', 'trip_headsign', 'shape_id',
+] as const;
+
+export function getAvailableProperties(layer: LayerType): string[] {
+  switch (layer) {
+    case 'stops':
+      return [...STOPS_DEFAULT_PROPERTIES, ...STOPS_JOIN_PROPERTIES];
+    case 'lines':
+      return [...LINES_DEFAULT_PROPERTIES, ...LINES_JOIN_PROPERTIES];
+    case 'trips':
+      return [...TRIPS_DEFAULT_PROPERTIES];
+  }
+}
+
+export function normalizeColor(color: string | null | undefined): string | null {
+  if (!color) return null;
+  const cleaned = color.replace(/^#/, '').trim();
+  if (/^[0-9a-fA-F]{6}$/.test(cleaned)) {
+    return `#${cleaned.toUpperCase()}`;
+  }
+  return null;
+}
