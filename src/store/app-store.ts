@@ -323,16 +323,24 @@ export const useAppStore = create<AppState>((set, get) => ({
         const routes = await queryRoutesWithShapes(db);
         const hasShapes = await tableExists(db, 'shapes');
         let shapePoints: import('../db/queries').ShapePoint[] = [];
-        let fallbackStops: Map<string, Array<{ stop_lat: number; stop_lon: number }>> | undefined;
         if (hasShapes) {
           shapePoints = await queryShapePoints(db);
-        } else {
-          fallbackStops = new Map();
+        }
+        const fallbackStops = new Map<string, Array<{ stop_lat: number; stop_lon: number }>>();
+        const coveredRouteIds = new Set<string>();
+        if (shapePoints.length > 0) {
+          const shapeIdSet = new Set(shapePoints.map(p => p.shape_id));
           for (const route of routes) {
-            const stops = await queryStopSequenceForRoute(db, String(route.route_id));
-            if (stops.length >= 2) {
-              fallbackStops.set(String(route.route_id), stops);
+            if ((route.shape_ids ?? []).some(sid => shapeIdSet.has(sid))) {
+              coveredRouteIds.add(String(route.route_id));
             }
+          }
+        }
+        for (const route of routes) {
+          if (coveredRouteIds.has(String(route.route_id))) continue;
+          const stops = await queryStopSequenceForRoute(db, String(route.route_id));
+          if (stops.length >= 2) {
+            fallbackStops.set(String(route.route_id), stops);
           }
         }
         return buildLinesGeoJSON(routes, shapePoints, [...getAvailableProperties('lines')], coordinatePrecision, fallbackStops);

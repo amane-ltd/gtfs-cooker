@@ -15,6 +15,7 @@ export function setLanguage(lang: Language) {
 }
 
 const en = {
+  'app.description': 'Convert GTFS to GeoJSON for GIS visualization',
   'section.load': '1. Load GTFS',
   'section.results': '2. Load Results',
   'section.layer': '3. Output Layer',
@@ -156,6 +157,7 @@ const en = {
 type Dict = { [K in keyof typeof en]: (typeof en)[K] extends (...args: infer A) => string ? (...args: A) => string : string };
 
 const ja: Dict = {
+  'app.description': 'GTFSをGeoJSONに変換してGISで可視化',
   'section.load': '1. GTFS 読み込み',
   'section.results': '2. 読み込み結果',
   'section.layer': '3. 出力レイヤー',

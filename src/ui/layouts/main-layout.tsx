@@ -73,7 +73,7 @@ export function MainLayout() {
               </button>
             </div>
           </div>
-          <p>GTFS ZIP → GeoJSON</p>
+          <p>{t('app.description')}</p>
         </div>
 
         <div className="sidebar-content">
