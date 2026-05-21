@@ -132,7 +132,7 @@ function buildDeckLayers(
         radiusMinPixels: 3,
         radiusMaxPixels: 12,
         getFillColor: color,
-        getLineColor: (d: Feature, { index }: { index: number }) =>
+        getLineColor: (_d: Feature, { index }: { index: number }) =>
           pinnedInfo?.sourceLayerId === key && pinnedInfo.index === index ? HIGHLIGHT_COLOR : [255, 255, 255, 255],
         lineWidthMinPixels: (pinnedInfo?.sourceLayerId === key) ? 3 : 1,
         stroked: true,
@@ -214,7 +214,7 @@ function buildDeckLayers(
         radiusMinPixels: 3,
         radiusMaxPixels: 60,
         getFillColor: color,
-        getLineColor: (d: Feature, { index }: { index: number }) =>
+        getLineColor: (_d: Feature, { index }: { index: number }) =>
           pinnedInfo?.sourceLayerId === key && pinnedInfo.index === index ? HIGHLIGHT_COLOR : [255, 255, 255, 255],
         lineWidthMinPixels: (pinnedInfo?.sourceLayerId === key) ? 3 : 1,
         stroked: true,
@@ -277,9 +277,9 @@ function buildDeckLayers(
           const coords = (d.geometry as unknown as { coordinates: number[][] }).coordinates;
           return coords[1] as [number, number];
         },
-        getSourceColor: (d: Feature, { index }: { index: number }) =>
+        getSourceColor: (_d: Feature, { index }: { index: number }) =>
           pinnedInfo?.sourceLayerId === key && pinnedInfo.index === index ? HIGHLIGHT_COLOR : color,
-        getTargetColor: (d: Feature, { index }: { index: number }) =>
+        getTargetColor: (_d: Feature, { index }: { index: number }) =>
           pinnedInfo?.sourceLayerId === key && pinnedInfo.index === index ? HIGHLIGHT_COLOR : color,
         getWidth: key === 'matching-flow'
           ? (d: Feature) => Math.max(1, Math.sqrt(Number(d.properties?.ridership ?? 0)) * 0.5)

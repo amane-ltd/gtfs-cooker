@@ -2,7 +2,7 @@ import { bbox } from '@turf/bbox';
 import { bboxPolygon } from '@turf/bbox-polygon';
 import { convex } from '@turf/convex';
 import { concave } from '@turf/concave';
-import type { FeatureCollection, Feature, Polygon } from 'geojson';
+import type { FeatureCollection, Polygon, Point } from 'geojson';
 
 export function buildEnvelope(
   stopsFC: FeatureCollection,
@@ -39,7 +39,7 @@ export function buildConvexHull(
     type: 'FeatureCollection',
     features: [{
       type: 'Feature',
-      geometry: hull.geometry,
+      geometry: hull.geometry as Polygon,
       properties: { agency_name: agencyName },
     }],
   };
@@ -52,7 +52,7 @@ export function buildConcaveHull(
 ): FeatureCollection<Polygon> {
   if (stopsFC.features.length === 0) return { type: 'FeatureCollection', features: [] };
 
-  const hull = concave(stopsFC, { maxEdge, units: 'kilometers' });
+  const hull = concave(stopsFC as FeatureCollection<Point>, { maxEdge, units: 'kilometers' });
   if (!hull) {
     const fallback = convex(stopsFC);
     if (!fallback) return { type: 'FeatureCollection', features: [] };
@@ -70,7 +70,7 @@ export function buildConcaveHull(
     type: 'FeatureCollection',
     features: [{
       type: 'Feature',
-      geometry: hull.geometry,
+      geometry: hull.geometry as Polygon,
       properties: { agency_name: agencyName },
     }],
   };
