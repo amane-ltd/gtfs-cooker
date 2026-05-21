@@ -140,6 +140,8 @@ export function MainLayout() {
 
         <div className="privacy-notice">
           {t('privacy')}
+          <br />
+          {t('distributor.label')}: <a href="https://github.com/nagampere" target="_blank" rel="noopener noreferrer">nagampere</a> / <a href="https://amane.ltd/" target="_blank" rel="noopener noreferrer">{t('distributor.name')}</a>
         </div>
       </aside>
 

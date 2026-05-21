@@ -658,6 +658,15 @@ input[type='radio'] {
   background: var(--color-surface);
 }
 
+.privacy-notice a {
+  color: var(--color-text-muted);
+  text-decoration: underline;
+}
+
+.privacy-notice a:hover {
+  color: var(--color-text);
+}
+
 /* ── Hover Panel ─────────────────────────────── */
 
 .hover-panel {

@@ -64,6 +64,8 @@ const en = {
   'btn.generating': 'Generating...',
 
   'privacy': 'Data is not sent to any server',
+  'distributor.label': 'Distributor',
+  'distributor.name': 'AMANE Ltd.',
   'log': 'Log',
   'log.empty': 'Load a GTFS ZIP file to begin',
 
@@ -203,6 +205,8 @@ const ja: Dict = {
   'btn.generating': '生成中...',
 
   'privacy': 'データはサーバーに送信されません',
+  'distributor.label': '配布元',
+  'distributor.name': '株式会社AMANE',
   'log': 'ログ',
   'log.empty': 'GTFS ZIP ファイルを読み込んでください',
 
