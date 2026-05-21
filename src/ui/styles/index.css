@@ -131,6 +131,15 @@ body {
   letter-spacing: 0.5px;
 }
 
+.sidebar-header h1 a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.sidebar-header h1 a:hover {
+  text-decoration: underline;
+}
+
 .sidebar-header p {
   font-size: 10px;
   color: var(--color-text-muted);

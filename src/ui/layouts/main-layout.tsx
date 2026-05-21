@@ -51,7 +51,7 @@ export function MainLayout() {
       <aside className={`sidebar${sidebarOpen ? '' : ' collapsed'}`}>
         <div className="sidebar-header">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h1>gtfs-cooker</h1>
+            <h1><a href="https://github.com/amane-ltd/gtfs-cooker" target="_blank" rel="noopener noreferrer">gtfs-cooker</a></h1>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <button
                 className="sidebar-toggle"
