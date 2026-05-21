@@ -1,8 +1,7 @@
-import { lineString, multiLineString, featureCollection } from '@turf/helpers';
-import truncate from '@turf/truncate';
 import type { FeatureCollection, Feature, Geometry } from 'geojson';
 import type { ShapePoint, RouteWithShapes } from '../db/queries';
 import { normalizeColor } from '../gtfs/types';
+import { makeLineString, makeMultiLineString, makeFeatureCollection } from './helpers';
 
 export function buildLinesGeoJSON(
   routes: RouteWithShapes[],
@@ -57,13 +56,11 @@ export function buildLinesGeoJSON(
     if (allCoords.length === 0) continue;
 
     if (allCoords.length === 1) {
-      const feat = lineString(allCoords[0]!, props);
-      features.push(truncate(feat, { precision }));
+      features.push(makeLineString(allCoords[0]!, props, precision));
     } else {
-      const feat = multiLineString(allCoords, props);
-      features.push(truncate(feat, { precision }));
+      features.push(makeMultiLineString(allCoords, props, precision));
     }
   }
 
-  return featureCollection(features);
+  return makeFeatureCollection(features);
 }

@@ -24,6 +24,7 @@ export async function getDb(): Promise<duckdb.AsyncDuckDB> {
   const logger = new duckdb.ConsoleLogger();
   db = new duckdb.AsyncDuckDB(logger, worker);
   await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+
   return db;
 }
 

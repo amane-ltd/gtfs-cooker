@@ -4,6 +4,7 @@ import { useT } from '../hooks/use-t';
 import { DropZone } from '../components/drop-zone';
 import { LayerSelector } from '../components/layer-selector';
 import { PropertyPicker } from '../components/property-picker';
+import { RidershipPanel } from '../components/ridership-panel';
 import { MapPreview } from '../components/map-preview';
 import { LogPanel } from '../components/log-panel';
 import { ProgressBar } from '../components/progress-bar';
@@ -29,11 +30,14 @@ export function MainLayout() {
   const progress = useAppStore(s => s.progress);
   const generatedLayers = useAppStore(s => s.generatedLayers);
   const exportFormat = useAppStore(s => s.exportFormat);
+  const is3D = useAppStore(s => s.is3D);
+  const setIs3D = useAppStore(s => s.setIs3D);
   const generateLayers = useAppStore(s => s.generateLayers);
   const reset = useAppStore(s => s.reset);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [logOpen, setLogOpen] = useState(true);
 
+  const selectedLayer = useAppStore(s => s.selectedLayer);
   const canGenerate = phase === 'loaded' || phase === 'done';
   const hasResults = Object.keys(generatedLayers).length > 0;
 
@@ -56,6 +60,13 @@ export function MainLayout() {
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 16 }}>language</span>
                 <span style={{ fontSize: 10, fontWeight: 500 }}>{language.toUpperCase()}</span>
+              </button>
+              <button
+                className={`sidebar-toggle${is3D ? ' sidebar-toggle-active' : ''}`}
+                onClick={() => setIs3D(!is3D)}
+                title={is3D ? '2D' : '3D'}
+              >
+                <span style={{ fontSize: 11, fontWeight: 600 }}>{is3D ? '2D' : '3D'}</span>
               </button>
               <button className="sidebar-toggle" onClick={() => setSidebarOpen(false)}>
                 <span className="material-symbols-outlined">chevron_left</span>
@@ -96,6 +107,7 @@ export function MainLayout() {
             <>
               <Section title={t('section.layer')} defaultOpen>
                 <LayerSelector />
+                {selectedLayer === 'matching' && <RidershipPanel />}
               </Section>
 
               <Section title={t('section.properties')}>
@@ -115,7 +127,7 @@ export function MainLayout() {
           </button>
           {hasResults && (
             <button
-              className="btn btn-secondary btn-icon"
+              className="btn btn-download btn-icon"
               onClick={() => downloadAll(generatedLayers, exportFormat)}
             >
               <span className="material-symbols-outlined">download</span>

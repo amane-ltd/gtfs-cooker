@@ -18,6 +18,7 @@
 - [docs/dev/08-development-phases.qmd](docs/dev/08-development-phases.qmd) — 開発フェーズ
 - [docs/dev/09-claude-code-tasks.qmd](docs/dev/09-claude-code-tasks.qmd) — Claude Code への依頼事項
 - [docs/dev/10-references.qmd](docs/dev/10-references.qmd) — 参考資料
+- [docs/dev/11-ridership-data.qmd](docs/dev/11-ridership-data.qmd) — 乗降実績データ対応
 
 ---
 
@@ -28,10 +29,10 @@
 
 ### 技術スタック
 - Vite + TypeScript + React
-- DuckDB-WASM（データ格納・クエリ）
+- DuckDB-WASM（データ格納・リレーショナルクエリ）
+- Turf.js（空間処理: buffer / union / convex 等）
 - JSZip（ZIP 展開）
-- Turf.js（空間処理、サブパッケージ単位）
-- MapLibre GL JS（地図プレビュー）
+- deck.gl（データレイヤー描画）+ MapLibre GL JS（ベースマップ）
 - Zustand（状態管理）
 
 ### 絶対に守るルール

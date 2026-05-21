@@ -1,78 +1,61 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
-import Map, { Source, Layer } from 'react-map-gl/maplibre';
+import Map from 'react-map-gl/maplibre';
 import type { MapRef } from 'react-map-gl/maplibre';
+import { useControl } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { MapboxOverlay } from '@deck.gl/mapbox';
+import { ScatterplotLayer, PathLayer, PolygonLayer, ArcLayer } from '@deck.gl/layers';
+import type { Layer } from '@deck.gl/core';
 import { useAppStore } from '../../store/app-store';
-import type { LayerSpecification, MapLayerMouseEvent } from 'maplibre-gl';
-import bbox from '@turf/bbox';
-import { featureCollection } from '@turf/helpers';
+import { computeBbox } from '../../geojson/helpers';
 import type { FeatureCollection, Feature } from 'geojson';
+import type { PickingInfo } from '@deck.gl/core';
 
-const MAP_STYLE = {
-  version: 8 as const,
-  sources: {
-    osm: {
-      type: 'raster' as const,
-      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-      tileSize: 256,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    },
-  },
-  layers: [
-    {
-      id: 'osm',
-      type: 'raster' as const,
-      source: 'osm',
-    },
-  ],
+const MAP_STYLE = `${import.meta.env.BASE_URL}pale_vector.json`;
+
+const COLORS: Record<string, [number, number, number, number]> = {
+  stops:            [231,  76,  60, 200],
+  lines:            [ 52, 152, 219, 255],
+  trips:            [ 46, 204, 113, 200],
+  'stops-buffer':   [231,  76,  60,  50],
+  'lines-buffer':   [ 52, 152, 219,  50],
+  'stops-dissolved':[230, 126,  34,  60],
+  'lines-dissolved':[155,  89, 182,  60],
+  envelope:         [ 26, 188, 156,  40],
+  convex:           [241, 196,  15,  50],
+  concave:          [231,  76,  60,  50],
+  segments:         [ 27, 186, 214, 230],
+  'matching-stops': [231,  76,  60, 220],
+  'matching-lines': [ 52, 152, 219, 255],
+  'matching-segments':[ 27, 186, 214, 230],
+  'matching-flow':  [155,  89, 182, 200],
+  'matching-arc':   [149, 165, 166, 100],
 };
 
-const INTERACTIVE_LAYER_IDS = ['stops-circle', 'lines-line', 'trips-line'];
-
-const STOP_LAYER: LayerSpecification = {
-  id: 'stops-circle',
-  type: 'circle',
-  source: 'stops',
-  paint: {
-    'circle-radius': 4,
-    'circle-color': '#e74c3c',
-    'circle-stroke-color': '#fff',
-    'circle-stroke-width': 1,
-  },
+const OUTLINE_COLORS: Record<string, [number, number, number, number]> = {
+  'stops-buffer':   [231,  76,  60, 150],
+  'lines-buffer':   [ 52, 152, 219, 150],
+  'stops-dissolved':[230, 126,  34, 180],
+  'lines-dissolved':[155,  89, 182, 180],
+  envelope:         [ 26, 188, 156, 255],
+  convex:           [241, 196,  15, 255],
+  concave:          [231,  76,  60, 255],
 };
 
-const LINE_LAYER: LayerSpecification = {
-  id: 'lines-line',
-  type: 'line',
-  source: 'lines',
-  paint: {
-    'line-color': '#3498db',
-    'line-width': 2.5,
-    'line-opacity': 0.8,
-  },
-};
-
-const TRIP_LAYER: LayerSpecification = {
-  id: 'trips-line',
-  type: 'line',
-  source: 'trips',
-  paint: {
-    'line-color': '#2ecc71',
-    'line-width': 1.5,
-    'line-opacity': 0.5,
-  },
-};
+function DeckGLOverlay({ layers }: { layers: Layer[] }) {
+  const overlay = useControl<MapboxOverlay>(
+    () => new MapboxOverlay({ interleaved: false }),
+  );
+  overlay.setProps({ layers });
+  return null;
+}
 
 interface HoverInfo {
   properties: Record<string, unknown>;
   layerId: string;
+  index: number;
+  sourceLayerId: string;
 }
-
-const LAYER_LABELS: Record<string, string> = {
-  'stops-circle': 'stop',
-  'lines-line': 'line',
-  'trips-line': 'trip',
-};
 
 function formatValue(value: unknown): string {
   if (value === null || value === undefined) return '—';
@@ -80,31 +63,279 @@ function formatValue(value: unknown): string {
   return String(value);
 }
 
-function computeBounds(layers: Record<string, FeatureCollection>): [number, number, number, number] | null {
-  const allFeatures: Feature[] = [];
-  for (const fc of Object.values(layers)) {
-    allFeatures.push(...fc.features);
+const POLYGON_LAYERS = new Set([
+  'stops-buffer', 'lines-buffer',
+  'stops-dissolved', 'lines-dissolved',
+  'envelope', 'convex', 'concave',
+]);
+
+interface PolygonDatum {
+  polygon: number[][][];
+  feature: Feature;
+}
+
+function expandToPolygons(features: Feature[]): PolygonDatum[] {
+  const result: PolygonDatum[] = [];
+  for (const feat of features) {
+    const g = feat.geometry;
+    if (g.type === 'Polygon') {
+      result.push({ polygon: g.coordinates as number[][][], feature: feat });
+    } else if (g.type === 'MultiPolygon') {
+      for (const poly of g.coordinates as number[][][][]) {
+        result.push({ polygon: poly, feature: feat });
+      }
+    }
   }
-  if (allFeatures.length === 0) return null;
-  const merged = featureCollection(allFeatures);
-  const [minLng, minLat, maxLng, maxLat] = bbox(merged);
-  if (!isFinite(minLng) || !isFinite(minLat) || !isFinite(maxLng) || !isFinite(maxLat)) return null;
-  return [minLng, minLat, maxLng, maxLat];
+  return result;
+}
+
+interface PathDatum {
+  path: [number, number][];
+  feature: Feature;
+}
+
+function expandToPaths(features: Feature[]): PathDatum[] {
+  const result: PathDatum[] = [];
+  for (const feat of features) {
+    const g = feat.geometry;
+    if (g.type === 'LineString') {
+      result.push({ path: g.coordinates as [number, number][], feature: feat });
+    } else if (g.type === 'MultiLineString') {
+      for (const line of g.coordinates as [number, number][][]) {
+        result.push({ path: line, feature: feat });
+      }
+    }
+  }
+  return result;
+}
+
+const HIGHLIGHT_COLOR: [number, number, number, number] = [230, 255, 0, 200];
+
+function buildDeckLayers(
+  generatedLayers: Record<string, FeatureCollection>,
+  onHover: (info: PickingInfo) => void,
+  onClick: (info: PickingInfo) => void,
+  pinnedInfo: HoverInfo | null,
+) {
+  const layers: Layer[] = [];
+
+  for (const [key, fc] of Object.entries(generatedLayers)) {
+    if (fc.features.length === 0) continue;
+    const color = COLORS[key] ?? [100, 100, 100, 200];
+
+    if (key === 'stops') {
+      layers.push(new ScatterplotLayer({
+        id: key,
+        data: fc.features,
+        getPosition: (d: Feature) => (d.geometry as unknown as { coordinates: [number, number] }).coordinates,
+        getRadius: 50,
+        radiusMinPixels: 3,
+        radiusMaxPixels: 12,
+        getFillColor: color,
+        getLineColor: (d: Feature, { index }: { index: number }) =>
+          pinnedInfo?.sourceLayerId === key && pinnedInfo.index === index ? HIGHLIGHT_COLOR : [255, 255, 255, 255],
+        lineWidthMinPixels: (pinnedInfo?.sourceLayerId === key) ? 3 : 1,
+        stroked: true,
+        pickable: true,
+        onHover,
+        onClick,
+        updateTriggers: { getLineColor: [pinnedInfo?.sourceLayerId, pinnedInfo?.index] },
+      }));
+    } else if (key === 'lines' || key === 'trips' || key === 'segments') {
+      const pathData = expandToPaths(fc.features);
+      layers.push(new PathLayer({
+        id: `${key}-casing`,
+        data: pathData,
+        getPath: (d: PathDatum) => d.path as unknown as number[],
+        getWidth: key === 'lines' ? 5 : key === 'segments' ? 5 : 4,
+        widthMinPixels: key === 'lines' ? 5 : 4,
+        getColor: (_d: PathDatum, { index }: { index: number }) =>
+          pinnedInfo?.sourceLayerId === key && pinnedInfo.index === index ? HIGHLIGHT_COLOR : [255, 255, 255, key === 'trips' ? 150 : 230],
+        pickable: false,
+        updateTriggers: { getColor: [pinnedInfo?.sourceLayerId, pinnedInfo?.index] },
+      }));
+      const pathHoverClick = (handler: (info: PickingInfo) => void) => (info: PickingInfo) => {
+        if (info.object) {
+          const datum = info.object as PathDatum;
+          handler({ ...info, object: datum.feature } as PickingInfo);
+        } else {
+          handler(info);
+        }
+      };
+      layers.push(new PathLayer({
+        id: key,
+        data: pathData,
+        getPath: (d: PathDatum) => d.path as unknown as number[],
+        getWidth: key === 'lines' ? 2.5 : key === 'segments' ? 2 : 1.5,
+        widthMinPixels: key === 'lines' ? 2 : 1,
+        getColor: color,
+        pickable: true,
+        onHover: pathHoverClick(onHover),
+        onClick: pathHoverClick(onClick),
+      }));
+    } else if (POLYGON_LAYERS.has(key)) {
+      const polyData = expandToPolygons(fc.features);
+      const outlineColor = OUTLINE_COLORS[key] ?? color;
+      const polyHoverClick = (handler: (info: PickingInfo) => void) => (info: PickingInfo) => {
+        if (info.object) {
+          const datum = info.object as PolygonDatum;
+          handler({ ...info, object: datum.feature } as PickingInfo);
+        } else {
+          handler(info);
+        }
+      };
+      layers.push(new PolygonLayer({
+        id: key,
+        data: polyData,
+        getPolygon: (d: PolygonDatum) => d.polygon,
+        getFillColor: color,
+        getLineColor: (_d: PolygonDatum, { index }: { index: number }) =>
+          pinnedInfo?.sourceLayerId === key && pinnedInfo.index === index ? HIGHLIGHT_COLOR : outlineColor,
+        getLineWidth: (_d: PolygonDatum, { index }: { index: number }) =>
+          pinnedInfo?.sourceLayerId === key && pinnedInfo.index === index ? 4 : 2,
+        lineWidthMinPixels: 1,
+        filled: true,
+        stroked: true,
+        pickable: true,
+        onHover: polyHoverClick(onHover),
+        onClick: polyHoverClick(onClick),
+        updateTriggers: { getLineColor: [pinnedInfo?.sourceLayerId, pinnedInfo?.index], getLineWidth: [pinnedInfo?.sourceLayerId, pinnedInfo?.index] },
+      }));
+    } else if (key === 'matching-stops') {
+      layers.push(new ScatterplotLayer({
+        id: key,
+        data: fc.features,
+        getPosition: (d: Feature) => (d.geometry as unknown as { coordinates: [number, number] }).coordinates,
+        getRadius: (d: Feature) => {
+          const on = Number(d.properties?.ridership_on ?? 0);
+          const off = Number(d.properties?.ridership_off ?? 0);
+          return Math.sqrt(on + off) * 20;
+        },
+        radiusMinPixels: 3,
+        radiusMaxPixels: 60,
+        getFillColor: color,
+        getLineColor: (d: Feature, { index }: { index: number }) =>
+          pinnedInfo?.sourceLayerId === key && pinnedInfo.index === index ? HIGHLIGHT_COLOR : [255, 255, 255, 255],
+        lineWidthMinPixels: (pinnedInfo?.sourceLayerId === key) ? 3 : 1,
+        stroked: true,
+        pickable: true,
+        onHover,
+        onClick,
+        updateTriggers: { getLineColor: [pinnedInfo?.sourceLayerId, pinnedInfo?.index] },
+      }));
+    } else if (key === 'matching-lines' || key === 'matching-segments') {
+      const pathData = expandToPaths(fc.features);
+      const matchPathHoverClick = (handler: (info: PickingInfo) => void) => (info: PickingInfo) => {
+        if (info.object) {
+          const datum = info.object as PathDatum;
+          handler({ ...info, object: datum.feature } as PickingInfo);
+        } else {
+          handler(info);
+        }
+      };
+      layers.push(new PathLayer({
+        id: `${key}-casing`,
+        data: pathData,
+        getPath: (d: PathDatum) => d.path as unknown as number[],
+        getWidth: (d: PathDatum) => {
+          const val = key === 'matching-lines'
+            ? Number(d.feature.properties?.ridership_count ?? 0)
+            : Number(d.feature.properties?.ridership ?? 0);
+          return Math.max(2, Math.sqrt(val) * 0.5 + 2);
+        },
+        widthMinPixels: 3,
+        getColor: (_d: PathDatum, { index }: { index: number }) =>
+          pinnedInfo?.sourceLayerId === key && pinnedInfo.index === index ? HIGHLIGHT_COLOR : [255, 255, 255, 200],
+        pickable: false,
+        updateTriggers: { getColor: [pinnedInfo?.sourceLayerId, pinnedInfo?.index] },
+      }));
+      layers.push(new PathLayer({
+        id: key,
+        data: pathData,
+        getPath: (d: PathDatum) => d.path as unknown as number[],
+        getWidth: (d: PathDatum) => {
+          const val = key === 'matching-lines'
+            ? Number(d.feature.properties?.ridership_count ?? 0)
+            : Number(d.feature.properties?.ridership ?? 0);
+          return Math.max(1, Math.sqrt(val) * 0.5);
+        },
+        widthMinPixels: 1,
+        getColor: color,
+        pickable: true,
+        onHover: matchPathHoverClick(onHover),
+        onClick: matchPathHoverClick(onClick),
+      }));
+    } else if (key === 'matching-flow' || key === 'matching-arc') {
+      layers.push(new ArcLayer({
+        id: key,
+        data: fc.features,
+        getSourcePosition: (d: Feature) => {
+          const coords = (d.geometry as unknown as { coordinates: number[][] }).coordinates;
+          return coords[0] as [number, number];
+        },
+        getTargetPosition: (d: Feature) => {
+          const coords = (d.geometry as unknown as { coordinates: number[][] }).coordinates;
+          return coords[1] as [number, number];
+        },
+        getSourceColor: (d: Feature, { index }: { index: number }) =>
+          pinnedInfo?.sourceLayerId === key && pinnedInfo.index === index ? HIGHLIGHT_COLOR : color,
+        getTargetColor: (d: Feature, { index }: { index: number }) =>
+          pinnedInfo?.sourceLayerId === key && pinnedInfo.index === index ? HIGHLIGHT_COLOR : color,
+        getWidth: key === 'matching-flow'
+          ? (d: Feature) => Math.max(1, Math.sqrt(Number(d.properties?.ridership ?? 0)) * 0.5)
+          : 1,
+        widthMinPixels: 1,
+        pickable: true,
+        onHover,
+        onClick,
+        updateTriggers: { getSourceColor: [pinnedInfo?.sourceLayerId, pinnedInfo?.index], getTargetColor: [pinnedInfo?.sourceLayerId, pinnedInfo?.index] },
+      }));
+    }
+  }
+
+  return layers;
 }
 
 export function MapPreview() {
   const generatedLayers = useAppStore(s => s.generatedLayers);
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
   const [pinnedInfo, setPinnedInfo] = useState<HoverInfo | null>(null);
+  const is3D = useAppStore(s => s.is3D);
+  const prevIs3D = useRef(is3D);
   const mapRef = useRef<MapRef>(null);
 
-  const stopsData = useMemo(() => generatedLayers.stops ?? null, [generatedLayers.stops]);
-  const linesData = useMemo(() => generatedLayers.lines ?? null, [generatedLayers.lines]);
-  const tripsData = useMemo(() => generatedLayers.trips ?? null, [generatedLayers.trips]);
+  const onHover = useCallback((info: PickingInfo) => {
+    if (info.object && (info.object as Feature).properties) {
+      setHoverInfo({
+        properties: (info.object as Feature).properties as Record<string, unknown>,
+        layerId: info.layer?.id ?? '',
+        index: info.index,
+        sourceLayerId: info.layer?.id ?? '',
+      });
+    } else {
+      setHoverInfo(null);
+    }
+  }, []);
+
+  const onClick = useCallback((info: PickingInfo) => {
+    if (info.object && (info.object as Feature).properties) {
+      setPinnedInfo({
+        properties: (info.object as Feature).properties as Record<string, unknown>,
+        layerId: info.layer?.id ?? '',
+        index: info.index,
+        sourceLayerId: info.layer?.id ?? '',
+      });
+    }
+  }, []);
+
+  const deckLayers = useMemo(
+    () => buildDeckLayers(generatedLayers, onHover, onClick, pinnedInfo),
+    [generatedLayers, onHover, onClick, pinnedInfo],
+  );
 
   useEffect(() => {
     if (Object.keys(generatedLayers).length === 0) return;
-    const bounds = computeBounds(generatedLayers);
+    const bounds = computeBbox(generatedLayers);
     if (!bounds) return;
     const map = mapRef.current;
     if (!map) return;
@@ -115,33 +346,14 @@ export function MapPreview() {
     );
   }, [generatedLayers]);
 
-  const onMouseMove = useCallback((e: MapLayerMouseEvent) => {
-    const feature = e.features?.[0];
-    if (!feature || !feature.properties) {
-      setHoverInfo(null);
-      return;
+  useEffect(() => {
+    if (prevIs3D.current === is3D) return;
+    prevIs3D.current = is3D;
+    const map = mapRef.current;
+    if (map) {
+      map.easeTo({ pitch: is3D ? 60 : 0, bearing: is3D ? -15 : 0, duration: 600 });
     }
-    setHoverInfo({
-      properties: feature.properties as Record<string, unknown>,
-      layerId: feature.layer.id,
-    });
-  }, []);
-
-  const onMouseLeave = useCallback(() => {
-    setHoverInfo(null);
-  }, []);
-
-  const onClick = useCallback((e: MapLayerMouseEvent) => {
-    const feature = e.features?.[0];
-    if (!feature || !feature.properties) {
-      setPinnedInfo(null);
-      return;
-    }
-    setPinnedInfo({
-      properties: feature.properties as Record<string, unknown>,
-      layerId: feature.layer.id,
-    });
-  }, []);
+  }, [is3D]);
 
   const displayInfo = pinnedInfo ?? hoverInfo;
 
@@ -152,32 +364,18 @@ export function MapPreview() {
         initialViewState={{ longitude: 139.7, latitude: 35.68, zoom: 10 }}
         style={{ width: '100%', height: '100%' }}
         mapStyle={MAP_STYLE}
-        interactiveLayerIds={INTERACTIVE_LAYER_IDS}
-        onMouseMove={onMouseMove}
-        onMouseLeave={onMouseLeave}
-        onClick={onClick}
+        maxPitch={85}
         cursor={hoverInfo ? 'pointer' : ''}
+        onClick={() => {
+          if (!hoverInfo) setPinnedInfo(null);
+        }}
       >
-        {linesData && (
-          <Source id="lines" type="geojson" data={linesData}>
-            <Layer {...LINE_LAYER} />
-          </Source>
-        )}
-        {tripsData && (
-          <Source id="trips" type="geojson" data={tripsData}>
-            <Layer {...TRIP_LAYER} />
-          </Source>
-        )}
-        {stopsData && (
-          <Source id="stops" type="geojson" data={stopsData}>
-            <Layer {...STOP_LAYER} />
-          </Source>
-        )}
+        <DeckGLOverlay layers={deckLayers} />
       </Map>
       {displayInfo && (
         <div className={`hover-panel${pinnedInfo ? ' pinned' : ''}`}>
           <div className="hover-panel-header">
-            <span>{LAYER_LABELS[displayInfo.layerId] ?? displayInfo.layerId}</span>
+            <span>{displayInfo.layerId}</span>
             {pinnedInfo && (
               <button className="hover-panel-close" onClick={() => setPinnedInfo(null)}>&times;</button>
             )}

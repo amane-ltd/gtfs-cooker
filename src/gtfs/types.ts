@@ -1,4 +1,15 @@
-export type LayerType = 'stops' | 'lines' | 'trips';
+export type MatchingOutputLayer =
+  | 'matching-stops' | 'matching-lines' | 'matching-segments'
+  | 'matching-flow' | 'matching-arc';
+
+export type LayerType =
+  | 'stops' | 'lines' | 'trips'
+  | 'stops-buffer' | 'lines-buffer'
+  | 'stops-dissolved' | 'lines-dissolved'
+  | 'envelope' | 'convex' | 'concave'
+  | 'segments'
+  | 'matching'
+  | MatchingOutputLayer;
 
 export interface GtfsSummary {
   agencyNames: string[];
@@ -82,14 +93,85 @@ export const TRIPS_DEFAULT_PROPERTIES = [
   'direction_id', 'trip_headsign', 'shape_id',
 ] as const;
 
+export type StopsDissolvedGroupBy = 'none' | 'agency_name' | 'route_id';
+export type LinesDissolvedGroupBy = 'none' | 'agency_id' | 'route_id' | 'shape_id';
+
+export const STOPS_DISSOLVED_PROPERTIES = ['agency_name', 'route_id'] as const;
+export const LINES_DISSOLVED_PROPERTIES = ['agency_id', 'agency_name', 'route_id', 'route_short_name', 'shape_id'] as const;
+export const AREA_PROPERTIES = ['agency_name'] as const;
+
+export const ENVELOPE_PROPERTIES = ['agency_name', 'bbox'] as const;
+
+export const SEGMENTS_PROPERTIES = [
+  'from_stop_id', 'from_stop_name',
+  'to_stop_id', 'to_stop_name',
+  'route_id', 'route_short_name',
+  'trip_count', 'distance_m',
+] as const;
+
+export const MATCHING_STOPS_PROPERTIES = [
+  'stop_id', 'stop_name', 'ridership_on', 'ridership_off',
+] as const;
+
+export const MATCHING_LINES_PROPERTIES = [
+  'route_id', 'route_short_name', 'route_long_name', 'ridership_count',
+] as const;
+
+export const MATCHING_SEGMENTS_PROPERTIES = [
+  'from_stop_id', 'from_stop_name',
+  'to_stop_id', 'to_stop_name',
+  'ridership',
+] as const;
+
+export const MATCHING_FLOW_PROPERTIES = [
+  'boarding_stop_id', 'boarding_stop_name',
+  'boarding_lat', 'boarding_lon',
+  'alighting_stop_id', 'alighting_stop_name',
+  'alighting_lat', 'alighting_lon',
+  'ridership',
+] as const;
+
+export const MATCHING_ARC_PROPERTIES = [
+  'boarding_stop_id', 'boarding_stop_name',
+  'boarding_lat', 'boarding_lon',
+  'alighting_stop_id', 'alighting_stop_name',
+  'alighting_lat', 'alighting_lon',
+  'passenger_count',
+] as const;
+
 export function getAvailableProperties(layer: LayerType): string[] {
   switch (layer) {
     case 'stops':
+    case 'stops-buffer':
       return [...STOPS_DEFAULT_PROPERTIES, ...STOPS_JOIN_PROPERTIES];
     case 'lines':
+    case 'lines-buffer':
       return [...LINES_DEFAULT_PROPERTIES, ...LINES_JOIN_PROPERTIES];
     case 'trips':
       return [...TRIPS_DEFAULT_PROPERTIES];
+    case 'stops-dissolved':
+      return [...STOPS_DISSOLVED_PROPERTIES];
+    case 'lines-dissolved':
+      return [...LINES_DISSOLVED_PROPERTIES];
+    case 'convex':
+    case 'concave':
+      return [...AREA_PROPERTIES];
+    case 'envelope':
+      return [...ENVELOPE_PROPERTIES];
+    case 'segments':
+      return [...SEGMENTS_PROPERTIES];
+    case 'matching-stops':
+      return [...MATCHING_STOPS_PROPERTIES];
+    case 'matching-lines':
+      return [...MATCHING_LINES_PROPERTIES];
+    case 'matching-segments':
+      return [...MATCHING_SEGMENTS_PROPERTIES];
+    case 'matching-flow':
+      return [...MATCHING_FLOW_PROPERTIES];
+    case 'matching-arc':
+      return [...MATCHING_ARC_PROPERTIES];
+    case 'matching':
+      return [];
   }
 }
 

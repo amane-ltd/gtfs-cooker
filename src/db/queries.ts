@@ -54,7 +54,21 @@ interface TripStopTime {
   stop_sequence: number;
 }
 
-export type { StopRow, ShapePoint, RouteWithShapes, TripStopTime };
+interface SegmentRow {
+  from_stop_id: string;
+  from_stop_name: string;
+  from_stop_lat: number;
+  from_stop_lon: number;
+  to_stop_id: string;
+  to_stop_name: string;
+  to_stop_lat: number;
+  to_stop_lon: number;
+  route_id: string;
+  route_short_name: string | null;
+  trip_count: number;
+}
+
+export type { StopRow, ShapePoint, RouteWithShapes, TripStopTime, SegmentRow };
 
 async function hasAgencyId(db: AsyncDuckDB): Promise<boolean> {
   const agencyExists = await tableExists(db, 'agency');
@@ -336,6 +350,57 @@ export async function queryStopSequenceForRoute(db: AsyncDuckDB, routeId: string
       SELECT stop_lat, stop_lon FROM ranked WHERE rn = 1 ORDER BY stop_sequence
     `);
     return result.toArray().map(r => coerceBigInts(r.toJSON() as Record<string, unknown>) as unknown as { stop_lat: number; stop_lon: number });
+  } finally {
+    await conn.close();
+  }
+}
+
+export async function querySegments(db: AsyncDuckDB): Promise<SegmentRow[]> {
+  const conn = await db.connect();
+  try {
+    const result = await conn.query(`
+      WITH ordered AS (
+        SELECT
+          CAST(t.route_id AS VARCHAR) AS route_id,
+          r.route_short_name,
+          CAST(st.stop_id AS VARCHAR) AS stop_id,
+          CAST(st.stop_sequence AS INTEGER) AS stop_sequence,
+          CAST(t.trip_id AS VARCHAR) AS trip_id,
+          LEAD(CAST(st.stop_id AS VARCHAR)) OVER (
+            PARTITION BY st.trip_id ORDER BY CAST(st.stop_sequence AS INTEGER)
+          ) AS next_stop_id
+        FROM stop_times st
+        JOIN trips t ON CAST(st.trip_id AS VARCHAR) = CAST(t.trip_id AS VARCHAR)
+        LEFT JOIN routes r ON CAST(t.route_id AS VARCHAR) = CAST(r.route_id AS VARCHAR)
+      ),
+      seg AS (
+        SELECT
+          route_id,
+          route_short_name,
+          stop_id AS from_stop_id,
+          next_stop_id AS to_stop_id,
+          COUNT(DISTINCT trip_id) AS trip_count
+        FROM ordered
+        WHERE next_stop_id IS NOT NULL
+        GROUP BY route_id, route_short_name, stop_id, next_stop_id
+      )
+      SELECT
+        seg.from_stop_id,
+        s1.stop_name AS from_stop_name,
+        CAST(s1.stop_lat AS DOUBLE) AS from_stop_lat,
+        CAST(s1.stop_lon AS DOUBLE) AS from_stop_lon,
+        seg.to_stop_id,
+        s2.stop_name AS to_stop_name,
+        CAST(s2.stop_lat AS DOUBLE) AS to_stop_lat,
+        CAST(s2.stop_lon AS DOUBLE) AS to_stop_lon,
+        seg.route_id,
+        seg.route_short_name,
+        seg.trip_count
+      FROM seg
+      JOIN stops s1 ON CAST(s1.stop_id AS VARCHAR) = seg.from_stop_id
+      JOIN stops s2 ON CAST(s2.stop_id AS VARCHAR) = seg.to_stop_id
+    `);
+    return result.toArray().map(r => coerceBigInts(r.toJSON() as Record<string, unknown>) as unknown as SegmentRow);
   } finally {
     await conn.close();
   }

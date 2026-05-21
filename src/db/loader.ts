@@ -67,10 +67,13 @@ async function ensureKeyColumns(conn: { query: (sql: string) => Promise<unknown>
   const needed = columnsNeeded[tableName];
   if (!needed) return;
 
+  const existingResult = await conn.query(
+    `SELECT column_name FROM information_schema.columns WHERE table_name = '${tableName}'`
+  ) as { toArray(): Array<{ toJSON(): Record<string, unknown> }> };
+  const existing = new Set(existingResult.toArray().map(r => String(r.toJSON().column_name)));
+
   for (const col of needed) {
-    try {
-      await conn.query(`SELECT "${col}" FROM ${tableName} LIMIT 0`);
-    } catch {
+    if (!existing.has(col)) {
       await conn.query(`ALTER TABLE ${tableName} ADD COLUMN "${col}" VARCHAR DEFAULT NULL`);
     }
   }

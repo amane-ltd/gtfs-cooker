@@ -12,12 +12,13 @@ const FORMAT_OPTIONS: { value: ExportFormat; label: string }[] = [
 export function PropertyPicker() {
   const { t } = useT();
   const selectedLayer = useAppStore(s => s.selectedLayer);
+  const matchingOutputLayer = useAppStore(s => s.matchingOutputLayer);
   const selectedProperties = useAppStore(s => s.selectedProperties);
   const setSelectedProperties = useAppStore(s => s.setSelectedProperties);
   const exportFormat = useAppStore(s => s.exportFormat);
   const setExportFormat = useAppStore(s => s.setExportFormat);
 
-  const layer = selectedLayer;
+  const layer = selectedLayer === 'matching' ? matchingOutputLayer : selectedLayer;
 
   return (
     <div>

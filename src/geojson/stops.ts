@@ -1,8 +1,7 @@
-import { point, featureCollection } from '@turf/helpers';
-import truncate from '@turf/truncate';
 import type { FeatureCollection, Point } from 'geojson';
 import type { StopRow } from '../db/queries';
 import { normalizeColor } from '../gtfs/types';
+import { makePoint, makeFeatureCollection } from './helpers';
 
 export function buildStopsGeoJSON(
   rows: StopRow[],
@@ -21,12 +20,12 @@ export function buildStopsGeoJSON(
       if (props.route_color) {
         props.route_color = normalizeColor(props.route_color as string);
       }
-      const feat = point(
+      return makePoint(
         [Number(row.stop_lon), Number(row.stop_lat)],
         props,
+        precision,
       );
-      return truncate(feat, { precision }) as typeof feat;
     });
 
-  return featureCollection(features);
+  return makeFeatureCollection(features);
 }

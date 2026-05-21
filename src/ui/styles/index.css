@@ -88,6 +88,16 @@ body {
   color: var(--color-text-strong);
 }
 
+.sidebar-toggle-active {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.sidebar-toggle-active:hover {
+  background: var(--color-accent-hover);
+  color: #fff;
+}
+
 .sidebar-toggle-closed {
   position: absolute;
   top: 12px;
@@ -299,6 +309,51 @@ body {
   display: block;
 }
 
+/* ── Layer Select ────────────────────────────── */
+
+.layer-select {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid rgba(160, 167, 180, 0.35);
+  border-radius: 2px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+  height: 34px;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236A7485'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+}
+
+.layer-select:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.layer-select:hover {
+  border-color: var(--color-text-muted);
+}
+
+.layer-select option {
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 4px 8px;
+}
+
+.layer-select optgroup {
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  font-weight: 600;
+  font-style: normal;
+  font-size: 10px;
+}
+
 /* ── Form Controls ───────────────────────────── */
 
 .checkbox-group,
@@ -482,6 +537,17 @@ input[type='radio'] {
   font-size: 18px;
 }
 
+.btn-download {
+  background: var(--color-accent);
+  color: #fff;
+  border: none;
+}
+
+.btn-download:hover {
+  background: var(--color-accent-hover);
+  color: #fff;
+}
+
 /* ── Log ─────────────────────────────────────── */
 
 .log-wrapper {
@@ -613,6 +679,7 @@ input[type='radio'] {
 .hover-panel.pinned {
   pointer-events: auto;
   box-shadow: 0 6px 16px 0 rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--color-accent);
 }
 
 .hover-panel-header {
@@ -685,4 +752,212 @@ input[type='radio'] {
 .hover-panel-val {
   word-break: break-all;
   color: var(--color-text-strong);
+}
+
+/* ── Ridership / Mapping ────────────────────── */
+
+.drop-zone-sm {
+  padding: 16px 12px;
+}
+
+.mapping-section {
+  margin-top: 6px;
+  background: var(--color-surface-alt);
+  border-radius: 2px;
+}
+
+.mapping-section-header {
+  padding: 6px 8px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--color-text);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: color 0.2s ease;
+}
+
+.mapping-section-header:hover {
+  color: var(--color-text-strong);
+}
+
+.mapping-badge {
+  font-size: 9px;
+  background: var(--color-primary);
+  color: #fff;
+  border-radius: 8px;
+  padding: 1px 6px;
+}
+
+.mapping-section-body {
+  padding: 0 8px 8px;
+}
+
+.mapping-actions {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.mapping-table-wrap {
+  max-height: 200px;
+  overflow-y: auto;
+  border-radius: 2px;
+}
+
+.mapping-table-wrap::-webkit-scrollbar {
+  width: 6px;
+}
+
+.mapping-table-wrap::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.mapping-table-wrap::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+.mapping-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 10px;
+}
+
+.mapping-table th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  padding: 3px 4px;
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  background: var(--color-surface-alt);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mapping-table th:nth-child(1) { width: 30%; }
+.mapping-table th:nth-child(2) { width: 50%; }
+.mapping-table th:nth-child(3) { width: 20%; }
+
+.mapping-table td {
+  padding: 2px 4px;
+  border-bottom: 1px solid var(--color-bg);
+  color: var(--color-text);
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mapping-cell-od {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mapping-cell-code {
+  white-space: nowrap;
+  max-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mapping-cell-name {
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mapping-cell-gtfs {
+  color: var(--color-text-muted);
+  font-size: 9px;
+}
+
+.mapping-sublayers {
+  font-size: 9px;
+  color: var(--color-text-muted);
+  margin-bottom: 4px;
+}
+
+.mapping-select {
+  width: 100%;
+  padding: 1px 4px;
+  font-size: 9px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 1px;
+}
+
+.mapping-status {
+  font-size: 9px;
+  font-weight: 500;
+}
+
+.mapping-show-more {
+  display: block;
+  width: 100%;
+  padding: 4px;
+  border: none;
+  background: transparent;
+  color: var(--color-accent);
+  font-size: 10px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.mapping-show-more:hover {
+  color: var(--color-accent-hover);
+}
+
+/* ── Field Config ───────────────────────────── */
+
+.field-config-group {
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--color-bg);
+}
+
+.field-config-group:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.field-config-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 3px;
+}
+
+.field-config-label {
+  flex: 0 0 auto;
+  width: 90px;
+  font-size: 9px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.field-config-select {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 4px;
+  font-size: 9px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 1px;
+  height: 22px;
+}
+
+.field-config-select:focus {
+  outline: none;
+  border-color: var(--color-accent);
 }
