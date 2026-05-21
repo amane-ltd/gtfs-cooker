@@ -46,7 +46,7 @@ const STATUS_COLORS: Record<string, string> = {
   'normalized': '#8BC34A',
   'partial': 'var(--color-warning)',
   'manual': 'var(--color-accent)',
-  'unmatched': 'var(--color-text-muted)',
+  'unmatched': 'var(--color-error)',
   'skipped': 'var(--color-text-muted)',
 };
 
