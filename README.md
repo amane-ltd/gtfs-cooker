@@ -1,8 +1,10 @@
-# gtfs-cooker
-
-A browser-based tool that converts GTFS ZIP files into GeoJSON for visualization and analysis in GIS tools such as [Kepler.gl](https://kepler.gl/), [QGIS](https://qgis.org/), and other applications that support GeoJSON. All processing happens entirely on the client side — no data is ever sent to a server.
+# GTFS-cooker
 
 **Live Demo**: [https://amane-ltd.github.io/gtfs-cooker/](https://amane-ltd.github.io/gtfs-cooker/)
+
+![](public/favicon.svg)
+
+A browser-based tool that converts GTFS ZIP files into GeoJSON for visualization and analysis in GIS tools such as [Kepler.gl](https://kepler.gl/), [QGIS](https://qgis.org/), and other applications that support GeoJSON. All processing happens entirely on the client side — no data is ever sent to a server.
 
 GTFS（General Transit Feed Specification）の ZIP ファイルから GeoJSON を生成するブラウザ完結型 Web アプリです。出力ファイルは [Kepler.gl](https://kepler.gl/)、[QGIS](https://qgis.org/) などの GIS ツールで可視化・分析に利用できます。データは一切サーバーに送信されません。
 
