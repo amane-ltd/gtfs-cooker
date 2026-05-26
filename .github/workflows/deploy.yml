@@ -30,7 +30,7 @@ jobs:
       - run: npm run docs:build
       - run: cp -r dist-docs dist/docs
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v4
         with:
           path: dist
 
