@@ -39,7 +39,7 @@ const ALL_LAYERS: LayerType[] = [
   'segments',
   'matching',
   'matching-stops', 'matching-lines', 'matching-segments',
-  'matching-flow', 'matching-arc',
+  'matching-flow', 'matching-od',
 ];
 
 interface AppState {
@@ -117,7 +117,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   gtfsSummary: null,
   validationResults: [],
   selectedLayer: 'stops' as LayerType,
-  tripsBaseDate: '',
+  tripsBaseDate: new Date().toISOString().slice(0, 10),
   tripsRouteFilter: '',
   bufferRadius: 300,
   concaveMaxEdge: 2,
@@ -268,7 +268,30 @@ export const useAppStore = create<AppState>((set, get) => ({
         loadedFiles,
       };
 
-      set({ gtfsSummary: summary, phase: 'loaded' });
+      let baseDate = new Date().toISOString().slice(0, 10);
+      if (hasCalendar) {
+        const cConn = await db.connect();
+        try {
+          const res = await cConn.query(
+            `SELECT MIN(CAST(start_date AS VARCHAR)) AS sd, MAX(CAST(end_date AS VARCHAR)) AS ed FROM calendar`
+          );
+          const row = res.toArray()[0]?.toJSON() as Record<string, unknown> | undefined;
+          if (row?.sd && row?.ed) {
+            const today = baseDate.replace(/-/g, '');
+            const sd = String(row.sd);
+            const ed = String(row.ed);
+            if (today < sd) {
+              baseDate = `${sd.slice(0, 4)}-${sd.slice(4, 6)}-${sd.slice(6, 8)}`;
+            } else if (today > ed) {
+              baseDate = `${ed.slice(0, 4)}-${ed.slice(4, 6)}-${ed.slice(6, 8)}`;
+            }
+          }
+        } finally {
+          await cConn.close();
+        }
+      }
+
+      set({ gtfsSummary: summary, phase: 'loaded', tripsBaseDate: baseDate });
       addLog('info', tf('log.loadComplete', stopCount, routeCount, tripCount));
     } catch (e) {
       addLog('error', tf('log.loadError', e instanceof Error ? e.message : String(e)));
@@ -597,10 +620,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         addLog('info', tf('log.features', 'matching-flow', results['matching-flow'].features.length));
       }
 
-      if (layer === 'matching-arc' && await tableExists(db, 'ridership_arc')) {
+      if (layer === 'matching-od' && await tableExists(db, 'ridership_arc')) {
         const rows = await queryRidershipArcs(db);
-        results['matching-arc'] = buildArcFeatures(rows, 'passenger_count');
-        addLog('info', tf('log.features', 'matching-arc', results['matching-arc'].features.length));
+        results['matching-od'] = buildArcFeatures(rows, 'passenger_count');
+        addLog('info', tf('log.features', 'matching-od', results['matching-od'].features.length));
       }
 
       set({ generatedLayers: results, phase: 'done', progress: null });
@@ -885,7 +908,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       gtfsSummary: null,
       validationResults: [],
       selectedLayer: 'stops' as LayerType,
-      tripsBaseDate: '',
+      tripsBaseDate: new Date().toISOString().slice(0, 10),
       tripsRouteFilter: '',
       bufferRadius: 300,
       concaveMaxEdge: 2,

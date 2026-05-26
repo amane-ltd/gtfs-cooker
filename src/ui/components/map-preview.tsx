@@ -29,7 +29,7 @@ const COLORS: Record<string, [number, number, number, number]> = {
   'matching-lines': [ 52, 152, 219, 255],
   'matching-segments':[ 27, 186, 214, 230],
   'matching-flow':  [155,  89, 182, 200],
-  'matching-arc':   [149, 165, 166, 100],
+  'matching-od':   [149, 165, 166, 100],
 };
 
 const OUTLINE_COLORS: Record<string, [number, number, number, number]> = {
@@ -241,7 +241,7 @@ function buildDeckLayers(
           const val = key === 'matching-lines'
             ? Number(d.feature.properties?.ridership_count ?? 0)
             : Number(d.feature.properties?.ridership ?? 0);
-          return Math.max(2, Math.sqrt(val) * 0.5 + 2);
+          return Math.max(2, Math.sqrt(val) * 2 + 2);
         },
         widthMinPixels: 3,
         getColor: (_d: PathDatum, { index }: { index: number }) =>
@@ -257,7 +257,7 @@ function buildDeckLayers(
           const val = key === 'matching-lines'
             ? Number(d.feature.properties?.ridership_count ?? 0)
             : Number(d.feature.properties?.ridership ?? 0);
-          return Math.max(1, Math.sqrt(val) * 0.5);
+          return Math.max(1, Math.sqrt(val) * 1.5);
         },
         widthMinPixels: 1,
         getColor: color,
@@ -265,7 +265,7 @@ function buildDeckLayers(
         onHover: matchPathHoverClick(onHover),
         onClick: matchPathHoverClick(onClick),
       }));
-    } else if (key === 'matching-flow' || key === 'matching-arc') {
+    } else if (key === 'matching-flow' || key === 'matching-od') {
       layers.push(new ArcLayer({
         id: key,
         data: fc.features,
@@ -282,9 +282,9 @@ function buildDeckLayers(
         getTargetColor: (_d: Feature, { index }: { index: number }) =>
           pinnedInfo?.sourceLayerId === key && pinnedInfo.index === index ? HIGHLIGHT_COLOR : color,
         getWidth: key === 'matching-flow'
-          ? (d: Feature) => Math.max(1, Math.sqrt(Number(d.properties?.ridership ?? 0)) * 0.5)
+          ? (d: Feature) => Math.max(1, Math.sqrt(Number(d.properties?.ridership ?? 0)) * 2)
           : 1,
-        widthMinPixels: 1,
+        widthMinPixels: key === 'matching-flow' ? 2 : 1,
         pickable: true,
         onHover,
         onClick,

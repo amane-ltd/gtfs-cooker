@@ -17,6 +17,7 @@ const LAYER_GROUPS: { group: string; layers: { id: LayerType; label: string; des
       { id: 'stops', label: 'stops', descKey: 'layer.stops' },
       { id: 'lines', label: 'lines', descKey: 'layer.lines' },
       { id: 'trips', label: 'trips', descKey: 'layer.trips' },
+      { id: 'segments', label: 'segments', descKey: 'layer.segments' },
     ],
   },
   {
@@ -39,12 +40,6 @@ const LAYER_GROUPS: { group: string; layers: { id: LayerType; label: string; des
       { id: 'envelope', label: 'envelope', descKey: 'layer.envelope' },
       { id: 'convex', label: 'convex', descKey: 'layer.convex' },
       { id: 'concave', label: 'concave', descKey: 'layer.concave' },
-    ],
-  },
-  {
-    group: 'Segment',
-    layers: [
-      { id: 'segments', label: 'segments', descKey: 'layer.segments' },
     ],
   },
   {

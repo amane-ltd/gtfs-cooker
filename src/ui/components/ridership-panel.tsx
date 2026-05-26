@@ -15,14 +15,14 @@ const SELECTABLE_FORMATS: { value: RidershipFormat; key: string }[] = [
 
 type MatchingLayerDescKey =
   | 'layer.matching-stops' | 'layer.matching-lines' | 'layer.matching-segments'
-  | 'layer.matching-flow' | 'layer.matching-arc';
+  | 'layer.matching-flow' | 'layer.matching-od';
 
 const MATCHING_SUB_LAYERS: { id: MatchingOutputLayer; label: string; descKey: MatchingLayerDescKey }[] = [
   { id: 'matching-stops', label: 'matching-stops', descKey: 'layer.matching-stops' },
   { id: 'matching-lines', label: 'matching-lines', descKey: 'layer.matching-lines' },
   { id: 'matching-segments', label: 'matching-segments', descKey: 'layer.matching-segments' },
   { id: 'matching-flow', label: 'matching-flow', descKey: 'layer.matching-flow' },
-  { id: 'matching-arc', label: 'matching-arc', descKey: 'layer.matching-arc' },
+  { id: 'matching-od', label: 'matching-od', descKey: 'layer.matching-od' },
 ];
 
 function getAvailableMatchingLayers(fieldConfig: RidershipFieldConfig | null): Set<MatchingOutputLayer> {
@@ -33,7 +33,7 @@ function getAvailableMatchingLayers(fieldConfig: RidershipFieldConfig | null): S
   if (fieldConfig.boardingStopCol && fieldConfig.alightingStopCol) {
     available.add('matching-segments');
     available.add('matching-flow');
-    available.add('matching-arc');
+    available.add('matching-od');
   } else if (fieldConfig.boardingStopCol && fieldConfig.tripIdCol && fieldConfig.stopSequenceCol) {
     available.add('matching-segments');
   }
@@ -369,7 +369,7 @@ function MappingTable({ type, rows }: { type: MappingType; rows: MappingRow[] })
 }
 
 const MAPPING_SUBLAYERS: Record<MappingType, string[]> = {
-  stop: ['matching-stops', 'matching-segments', 'matching-flow', 'matching-arc'],
+  stop: ['matching-stops', 'matching-segments', 'matching-flow', 'matching-od'],
   route: ['matching-lines'],
   agency: [],
 };
@@ -567,6 +567,7 @@ export function RidershipPanel() {
           {/* (C) Sub-layer selection */}
           {availableMatching.size > 0 && (
             <div className="field" style={{ marginTop: 8 }}>
+              <span className="field-label">{t('ridership.subLayer')}</span>
               <select
                 className="layer-select"
                 value={matchingOutputLayer}

@@ -82,6 +82,7 @@ body {
   gap: 2px;
   border-radius: 2px;
   transition: color 0.2s ease;
+  text-decoration: none;
 }
 
 .sidebar-toggle:hover {
@@ -552,9 +553,14 @@ input[type='radio'] {
   border: none;
 }
 
-.btn-download:hover {
+.btn-download:hover:not(:disabled) {
   background: var(--color-accent-hover);
   color: #fff;
+}
+
+.btn-download:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 /* ── Log ─────────────────────────────────────── */

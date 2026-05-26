@@ -48,7 +48,7 @@ const en = {
   'layer.matching-lines': 'LineString — Ridership by route',
   'layer.matching-segments': 'LineString — Ridership by segment',
   'layer.matching-flow': 'Arc — OD flow (aggregated)',
-  'layer.matching-arc': 'Arc — OD records (individual)',
+  'layer.matching-od': 'Arc — OD records (individual)',
   'layer.baseDate': 'Base date (required)',
   'layer.routeFilter': 'route_id filter (optional)',
   'layer.routePlaceholder': 'e.g. route_001',
@@ -90,6 +90,7 @@ const en = {
   'log.genError': (msg: string) => `Generation error: ${msg}`,
 
   'section.ridership': '5. Ridership Data',
+  'ridership.subLayer': 'Sub-layer',
   'ridership.drop': 'Drag & drop ridership CSV / Excel',
   'ridership.dropClick': 'or click to select a file',
   'ridership.format': 'Input format:',
@@ -190,7 +191,7 @@ const ja: Dict = {
   'layer.matching-lines': 'LineString — 路線別乗降数',
   'layer.matching-segments': 'LineString — 区間別乗降数',
   'layer.matching-flow': 'Arc — OD流動（集約）',
-  'layer.matching-arc': 'Arc — OD実績（個票）',
+  'layer.matching-od': 'Arc — OD実績（個票）',
   'layer.baseDate': '基準日（必須）',
   'layer.routeFilter': 'route_id 絞り込み（任意）',
   'layer.routePlaceholder': '例: route_001',
@@ -232,6 +233,7 @@ const ja: Dict = {
   'log.genError': (msg: string) => `生成エラー: ${msg}`,
 
   'section.ridership': '5. 乗降実績データ',
+  'ridership.subLayer': 'サブレイヤー',
   'ridership.drop': '乗降実績 CSV / Excel をドラッグ&ドロップ',
   'ridership.dropClick': 'またはクリックしてファイルを選択',
   'ridership.format': '入力フォーマット:',

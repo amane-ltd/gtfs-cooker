@@ -1,6 +1,6 @@
 export type MatchingOutputLayer =
   | 'matching-stops' | 'matching-lines' | 'matching-segments'
-  | 'matching-flow' | 'matching-arc';
+  | 'matching-flow' | 'matching-od';
 
 export type LayerType =
   | 'stops' | 'lines' | 'trips'
@@ -144,7 +144,7 @@ export const MATCHING_FLOW_PROPERTIES = [
   'ridership',
 ] as const;
 
-export const MATCHING_ARC_PROPERTIES = [
+export const MATCHING_OD_PROPERTIES = [
   'boarding_stop_id', 'boarding_stop_name',
   'boarding_lat', 'boarding_lon',
   'alighting_stop_id', 'alighting_stop_name',
@@ -181,8 +181,8 @@ export function getAvailableProperties(layer: LayerType): string[] {
       return [...MATCHING_SEGMENTS_PROPERTIES];
     case 'matching-flow':
       return [...MATCHING_FLOW_PROPERTIES];
-    case 'matching-arc':
-      return [...MATCHING_ARC_PROPERTIES];
+    case 'matching-od':
+      return [...MATCHING_OD_PROPERTIES];
     case 'matching':
       return [];
   }

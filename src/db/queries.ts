@@ -159,9 +159,9 @@ export async function queryStops(db: AsyncDuckDB): Promise<StopRow[]> {
           ${weekdayCountExpr} AS trip_weekday,
           ${holidayCountExpr} AS trip_holiday,
           ${hourlyLines.join(',\n          ')},
-          COUNT(DISTINCT CASE WHEN ${weekdayFilter}${hourExpr} BETWEEN 4 AND 9 THEN t.trip_id END) AS trips_morning,
-          COUNT(DISTINCT CASE WHEN ${weekdayFilter}${hourExpr} BETWEEN 10 AND 15 THEN t.trip_id END) AS trips_daytime,
-          COUNT(DISTINCT CASE WHEN ${weekdayFilter}${hourExpr} BETWEEN 16 AND 20 THEN t.trip_id END) AS trips_evening,
+          COUNT(DISTINCT CASE WHEN ${weekdayFilter}${hourExpr} BETWEEN 4 AND 8 THEN t.trip_id END) AS trips_morning,
+          COUNT(DISTINCT CASE WHEN ${weekdayFilter}${hourExpr} BETWEEN 9 AND 16 THEN t.trip_id END) AS trips_daytime,
+          COUNT(DISTINCT CASE WHEN ${weekdayFilter}${hourExpr} BETWEEN 17 AND 20 THEN t.trip_id END) AS trips_evening,
           COUNT(DISTINCT CASE WHEN ${weekdayFilter}${hourExpr} BETWEEN 21 AND 27 THEN t.trip_id END) AS trips_latenight
         FROM stop_times st
         JOIN trips t ON CAST(st.trip_id AS VARCHAR) = CAST(t.trip_id AS VARCHAR)
@@ -268,9 +268,9 @@ export async function queryRoutesWithShapes(db: AsyncDuckDB): Promise<RouteWithS
         ${weekdayExpr} AS trip_weekday,
         ${holidayExpr} AS trip_holiday,
         ${hourlyLines.join(',\n        ')},
-        COUNT(DISTINCT CASE WHEN ${weekdayFilter}th.first_hour BETWEEN 4 AND 9 THEN th.trip_id END) AS trips_morning,
-        COUNT(DISTINCT CASE WHEN ${weekdayFilter}th.first_hour BETWEEN 10 AND 15 THEN th.trip_id END) AS trips_daytime,
-        COUNT(DISTINCT CASE WHEN ${weekdayFilter}th.first_hour BETWEEN 16 AND 20 THEN th.trip_id END) AS trips_evening,
+        COUNT(DISTINCT CASE WHEN ${weekdayFilter}th.first_hour BETWEEN 4 AND 8 THEN th.trip_id END) AS trips_morning,
+        COUNT(DISTINCT CASE WHEN ${weekdayFilter}th.first_hour BETWEEN 9 AND 16 THEN th.trip_id END) AS trips_daytime,
+        COUNT(DISTINCT CASE WHEN ${weekdayFilter}th.first_hour BETWEEN 17 AND 20 THEN th.trip_id END) AS trips_evening,
         COUNT(DISTINCT CASE WHEN ${weekdayFilter}th.first_hour BETWEEN 21 AND 27 THEN th.trip_id END) AS trips_latenight
       FROM routes r
       ${agencyJoin}
@@ -460,9 +460,9 @@ export async function querySegments(db: AsyncDuckDB): Promise<SegmentRow[]> {
           ${weekdayExpr} AS trip_weekday,
           ${holidayExpr} AS trip_holiday,
           ${hourlyLines.join(',\n          ')},
-          COUNT(DISTINCT CASE WHEN ${weekdayFilter}hour BETWEEN 4 AND 9 THEN trip_id END) AS trips_morning,
-          COUNT(DISTINCT CASE WHEN ${weekdayFilter}hour BETWEEN 10 AND 15 THEN trip_id END) AS trips_daytime,
-          COUNT(DISTINCT CASE WHEN ${weekdayFilter}hour BETWEEN 16 AND 20 THEN trip_id END) AS trips_evening,
+          COUNT(DISTINCT CASE WHEN ${weekdayFilter}hour BETWEEN 4 AND 8 THEN trip_id END) AS trips_morning,
+          COUNT(DISTINCT CASE WHEN ${weekdayFilter}hour BETWEEN 9 AND 16 THEN trip_id END) AS trips_daytime,
+          COUNT(DISTINCT CASE WHEN ${weekdayFilter}hour BETWEEN 17 AND 20 THEN trip_id END) AS trips_evening,
           COUNT(DISTINCT CASE WHEN ${weekdayFilter}hour BETWEEN 21 AND 27 THEN trip_id END) AS trips_latenight
         FROM ordered
         WHERE next_stop_id IS NOT NULL

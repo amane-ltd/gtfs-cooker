@@ -53,6 +53,15 @@ export function MainLayout() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h1><a href="https://github.com/amane-ltd/gtfs-cooker" target="_blank" rel="noopener noreferrer">GTFS-cooker</a></h1>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <a
+                className="sidebar-toggle"
+                href={`https://amane-ltd.github.io/gtfs-cooker/docs/${language === 'ja' ? 'ja' : 'en'}/`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={language === 'ja' ? 'ドキュメント' : 'Documentation'}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>book_4</span>
+              </a>
               <button
                 className="sidebar-toggle"
                 onClick={() => setLanguage(language === 'en' ? 'ja' : 'en')}
@@ -64,9 +73,9 @@ export function MainLayout() {
               <button
                 className={`sidebar-toggle${is3D ? ' sidebar-toggle-active' : ''}`}
                 onClick={() => setIs3D(!is3D)}
-                title={is3D ? '2D' : '3D'}
+                title={is3D ? '3D' : '2D'}
               >
-                <span style={{ fontSize: 11, fontWeight: 600 }}>{is3D ? '2D' : '3D'}</span>
+                <span style={{ fontSize: 11, fontWeight: 600 }}>{is3D ? '3D' : '2D'}</span>
               </button>
               <button className="sidebar-toggle" onClick={() => setSidebarOpen(false)}>
                 <span className="material-symbols-outlined">chevron_left</span>
@@ -125,14 +134,13 @@ export function MainLayout() {
           >
             {phase === 'generating' ? t('btn.generating') : t('btn.generate')}
           </button>
-          {hasResults && (
-            <button
-              className="btn btn-download btn-icon"
-              onClick={() => downloadAll(generatedLayers, exportFormat)}
-            >
-              <span className="material-symbols-outlined">download</span>
-            </button>
-          )}
+          <button
+            className="btn btn-download btn-icon"
+            disabled={!hasResults}
+            onClick={() => downloadAll(generatedLayers, exportFormat)}
+          >
+            <span className="material-symbols-outlined">download</span>
+          </button>
           <button className="btn btn-secondary btn-icon" onClick={() => reset()}>
             <span className="material-symbols-outlined">refresh</span>
           </button>
