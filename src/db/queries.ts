@@ -32,8 +32,8 @@ interface RouteWithShapes {
   route_desc: string | null;
   agency_id: string | null;
   agency_name: string | null;
-  trip_count_weekday: number;
-  trip_count_holiday: number;
+  trip_weekday: number;
+  trip_holiday: number;
   trips_04: number; trips_05: number; trips_06: number; trips_07: number;
   trips_08: number; trips_09: number; trips_10: number; trips_11: number;
   trips_12: number; trips_13: number; trips_14: number; trips_15: number;
@@ -75,8 +75,8 @@ interface SegmentRow {
   to_stop_lon: number;
   route_id: string;
   route_short_name: string | null;
-  trip_count_weekday: number;
-  trip_count_holiday: number;
+  trip_weekday: number;
+  trip_holiday: number;
   trips_04: number; trips_05: number; trips_06: number; trips_07: number;
   trips_08: number; trips_09: number; trips_10: number; trips_11: number;
   trips_12: number; trips_13: number; trips_14: number; trips_15: number;
@@ -156,8 +156,8 @@ export async function queryStops(db: AsyncDuckDB): Promise<StopRow[]> {
           LIST(DISTINCT CAST(t.route_id AS VARCHAR) ORDER BY CAST(t.route_id AS VARCHAR)) AS routes,
           COUNT(DISTINCT t.route_id) AS route_count,
           MIN(${agencyNameExpr}) AS agency_name,
-          ${weekdayCountExpr} AS trip_count_weekday,
-          ${holidayCountExpr} AS trip_count_holiday,
+          ${weekdayCountExpr} AS trip_weekday,
+          ${holidayCountExpr} AS trip_holiday,
           ${hourlyLines.join(',\n          ')},
           COUNT(DISTINCT CASE WHEN ${weekdayFilter}${hourExpr} BETWEEN 4 AND 9 THEN t.trip_id END) AS trips_morning,
           COUNT(DISTINCT CASE WHEN ${weekdayFilter}${hourExpr} BETWEEN 10 AND 15 THEN t.trip_id END) AS trips_daytime,
@@ -171,7 +171,7 @@ export async function queryStops(db: AsyncDuckDB): Promise<StopRow[]> {
         GROUP BY st.stop_id
       )
       SELECT s.*, sr.routes, sr.agency_name, sr.route_count,
-             sr.trip_count_weekday, sr.trip_count_holiday,
+             sr.trip_weekday, sr.trip_holiday,
              ${Array.from({ length: 24 }, (_, i) => `sr.trips_${String(i + 4).padStart(2, '0')}`).join(', ')},
              sr.trips_morning, sr.trips_daytime, sr.trips_evening, sr.trips_latenight
       FROM stops s
@@ -265,8 +265,8 @@ export async function queryRoutesWithShapes(db: AsyncDuckDB): Promise<RouteWithS
         ${agencyIdSelect},
         ${agencyNameExpr} AS agency_name,
         LIST(DISTINCT th.shape_id) FILTER (WHERE th.shape_id IS NOT NULL) AS shape_ids,
-        ${weekdayExpr} AS trip_count_weekday,
-        ${holidayExpr} AS trip_count_holiday,
+        ${weekdayExpr} AS trip_weekday,
+        ${holidayExpr} AS trip_holiday,
         ${hourlyLines.join(',\n        ')},
         COUNT(DISTINCT CASE WHEN ${weekdayFilter}th.first_hour BETWEEN 4 AND 9 THEN th.trip_id END) AS trips_morning,
         COUNT(DISTINCT CASE WHEN ${weekdayFilter}th.first_hour BETWEEN 10 AND 15 THEN th.trip_id END) AS trips_daytime,
@@ -457,8 +457,8 @@ export async function querySegments(db: AsyncDuckDB): Promise<SegmentRow[]> {
           route_short_name,
           stop_id AS from_stop_id,
           next_stop_id AS to_stop_id,
-          ${weekdayExpr} AS trip_count_weekday,
-          ${holidayExpr} AS trip_count_holiday,
+          ${weekdayExpr} AS trip_weekday,
+          ${holidayExpr} AS trip_holiday,
           ${hourlyLines.join(',\n          ')},
           COUNT(DISTINCT CASE WHEN ${weekdayFilter}hour BETWEEN 4 AND 9 THEN trip_id END) AS trips_morning,
           COUNT(DISTINCT CASE WHEN ${weekdayFilter}hour BETWEEN 10 AND 15 THEN trip_id END) AS trips_daytime,
@@ -479,8 +479,8 @@ export async function querySegments(db: AsyncDuckDB): Promise<SegmentRow[]> {
         CAST(s2.stop_lon AS DOUBLE) AS to_stop_lon,
         seg.route_id,
         seg.route_short_name,
-        seg.trip_count_weekday,
-        seg.trip_count_holiday,
+        seg.trip_weekday,
+        seg.trip_holiday,
         ${Array.from({ length: 24 }, (_, i) => `seg.trips_${String(i + 4).padStart(2, '0')}`).join(', ')},
         seg.trips_morning,
         seg.trips_daytime,
