@@ -72,6 +72,20 @@ npm run dev      # Start dev server
 npm run build    # Production build
 ```
 
+## Documentation
+
+User documentation is built with [VitePress](https://vitepress.dev/) and deployed alongside the app.
+
+- **Japanese**: https://amane-ltd.github.io/gtfs-cooker/docs/ja/
+- **English**: https://amane-ltd.github.io/gtfs-cooker/docs/en/
+
+```bash
+npm run docs:dev    # Local preview (hot-reload)
+npm run docs:build  # Production build → dist-docs/
+```
+
+Documentation source files are in `docs/user/ja/` (Japanese) and `docs/user/en/` (English). Images go in `docs/user/images/`. The deploy workflow automatically builds and copies docs into `dist/docs/` on push to `main`.
+
 ## References
 
 - [nagix/gtfs-box](https://github.com/nagix/gtfs-box) — GTFS/GTFS Realtime viewer

@@ -4,3 +4,5 @@ dist/
 .DS_Store
 docs/dev/
 docs/_site/
+docs/user/.vitepress/cache/
+dist-docs/

@@ -27,6 +27,8 @@ jobs:
 
       - run: npm ci
       - run: npm run build
+      - run: npm run docs:build
+      - run: cp -r dist-docs dist/docs
 
       - uses: actions/upload-pages-artifact@v3
         with:
