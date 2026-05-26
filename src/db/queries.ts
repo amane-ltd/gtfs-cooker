@@ -34,6 +34,16 @@ interface RouteWithShapes {
   agency_name: string | null;
   trip_count_weekday: number;
   trip_count_holiday: number;
+  trips_04: number; trips_05: number; trips_06: number; trips_07: number;
+  trips_08: number; trips_09: number; trips_10: number; trips_11: number;
+  trips_12: number; trips_13: number; trips_14: number; trips_15: number;
+  trips_16: number; trips_17: number; trips_18: number; trips_19: number;
+  trips_20: number; trips_21: number; trips_22: number; trips_23: number;
+  trips_24: number; trips_25: number; trips_26: number; trips_27: number;
+  trips_morning: number;
+  trips_daytime: number;
+  trips_evening: number;
+  trips_latenight: number;
   shape_ids: string[];
 }
 
@@ -65,7 +75,18 @@ interface SegmentRow {
   to_stop_lon: number;
   route_id: string;
   route_short_name: string | null;
-  trip_count: number;
+  trip_count_weekday: number;
+  trip_count_holiday: number;
+  trips_04: number; trips_05: number; trips_06: number; trips_07: number;
+  trips_08: number; trips_09: number; trips_10: number; trips_11: number;
+  trips_12: number; trips_13: number; trips_14: number; trips_15: number;
+  trips_16: number; trips_17: number; trips_18: number; trips_19: number;
+  trips_20: number; trips_21: number; trips_22: number; trips_23: number;
+  trips_24: number; trips_25: number; trips_26: number; trips_27: number;
+  trips_morning: number;
+  trips_daytime: number;
+  trips_evening: number;
+  trips_latenight: number;
 }
 
 export type { StopRow, ShapePoint, RouteWithShapes, TripStopTime, SegmentRow };
@@ -138,7 +159,7 @@ export async function queryStops(db: AsyncDuckDB): Promise<StopRow[]> {
           ${weekdayCountExpr} AS trip_count_weekday,
           ${holidayCountExpr} AS trip_count_holiday,
           ${hourlyLines.join(',\n          ')},
-          COUNT(DISTINCT CASE WHEN ${weekdayFilter}${hourExpr} BETWEEN 5 AND 9 THEN t.trip_id END) AS trips_morning,
+          COUNT(DISTINCT CASE WHEN ${weekdayFilter}${hourExpr} BETWEEN 4 AND 9 THEN t.trip_id END) AS trips_morning,
           COUNT(DISTINCT CASE WHEN ${weekdayFilter}${hourExpr} BETWEEN 10 AND 15 THEN t.trip_id END) AS trips_daytime,
           COUNT(DISTINCT CASE WHEN ${weekdayFilter}${hourExpr} BETWEEN 16 AND 20 THEN t.trip_id END) AS trips_evening,
           COUNT(DISTINCT CASE WHEN ${weekdayFilter}${hourExpr} BETWEEN 21 AND 27 THEN t.trip_id END) AS trips_latenight
@@ -190,24 +211,48 @@ export async function queryShapePoints(db: AsyncDuckDB): Promise<ShapePoint[]> {
 
 export async function queryRoutesWithShapes(db: AsyncDuckDB): Promise<RouteWithShapes[]> {
   const hasCalendar = await tableExists(db, 'calendar');
+  const hasDepartureTime = await columnExists(db, 'stop_times', 'departure_time');
   const { joinClause: agencyJoin, nameExpr: agencyNameExpr } = await buildAgencyJoin(db);
   const routeHasAgencyId = await columnExists(db, 'routes', 'agency_id');
   const conn = await db.connect();
   try {
+    const timeCol = hasDepartureTime ? 'st.departure_time' : 'st.arrival_time';
+    const hourExpr = `CAST(SPLIT_PART(CAST(${timeCol} AS VARCHAR), ':', 1) AS INTEGER)`;
+
     const calendarJoin = hasCalendar
-      ? `LEFT JOIN calendar c ON CAST(t.service_id AS VARCHAR) = CAST(c.service_id AS VARCHAR)`
+      ? `LEFT JOIN calendar c ON CAST(th.service_id AS VARCHAR) = CAST(c.service_id AS VARCHAR)`
       : '';
+    const weekdayFilter = hasCalendar ? `c.monday = 1 AND ` : '';
     const weekdayExpr = hasCalendar
-      ? `COUNT(DISTINCT CASE WHEN c.monday = 1 THEN t.trip_id END)`
-      : `COUNT(DISTINCT t.trip_id)`;
+      ? `COUNT(DISTINCT CASE WHEN c.monday = 1 THEN th.trip_id END)`
+      : `COUNT(DISTINCT th.trip_id)`;
     const holidayExpr = hasCalendar
-      ? `COUNT(DISTINCT CASE WHEN c.sunday = 1 THEN t.trip_id END)`
+      ? `COUNT(DISTINCT CASE WHEN c.sunday = 1 THEN th.trip_id END)`
       : `0`;
+
+    const hourlyLines = [];
+    for (let h = 4; h <= 27; h++) {
+      const padded = String(h).padStart(2, '0');
+      hourlyLines.push(
+        `COUNT(DISTINCT CASE WHEN ${weekdayFilter}th.first_hour = ${h} THEN th.trip_id END) AS trips_${padded}`
+      );
+    }
 
     const agencyIdSelect = routeHasAgencyId ? `r.agency_id` : `NULL AS agency_id`;
     const agencyIdGroup = routeHasAgencyId ? `, r.agency_id` : '';
 
     const result = await conn.query(`
+      WITH trip_hours AS (
+        SELECT
+          CAST(t.trip_id AS VARCHAR) AS trip_id,
+          CAST(t.route_id AS VARCHAR) AS route_id,
+          CAST(t.service_id AS VARCHAR) AS service_id,
+          CAST(t.shape_id AS VARCHAR) AS shape_id,
+          MIN(${hourExpr}) AS first_hour
+        FROM trips t
+        JOIN stop_times st ON CAST(t.trip_id AS VARCHAR) = CAST(st.trip_id AS VARCHAR)
+        GROUP BY t.trip_id, t.route_id, t.service_id, t.shape_id
+      )
       SELECT
         r.route_id,
         r.route_short_name,
@@ -219,12 +264,17 @@ export async function queryRoutesWithShapes(db: AsyncDuckDB): Promise<RouteWithS
         r.route_desc,
         ${agencyIdSelect},
         ${agencyNameExpr} AS agency_name,
-        LIST(DISTINCT CAST(t.shape_id AS VARCHAR)) FILTER (WHERE t.shape_id IS NOT NULL) AS shape_ids,
+        LIST(DISTINCT th.shape_id) FILTER (WHERE th.shape_id IS NOT NULL) AS shape_ids,
         ${weekdayExpr} AS trip_count_weekday,
-        ${holidayExpr} AS trip_count_holiday
+        ${holidayExpr} AS trip_count_holiday,
+        ${hourlyLines.join(',\n        ')},
+        COUNT(DISTINCT CASE WHEN ${weekdayFilter}th.first_hour BETWEEN 4 AND 9 THEN th.trip_id END) AS trips_morning,
+        COUNT(DISTINCT CASE WHEN ${weekdayFilter}th.first_hour BETWEEN 10 AND 15 THEN th.trip_id END) AS trips_daytime,
+        COUNT(DISTINCT CASE WHEN ${weekdayFilter}th.first_hour BETWEEN 16 AND 20 THEN th.trip_id END) AS trips_evening,
+        COUNT(DISTINCT CASE WHEN ${weekdayFilter}th.first_hour BETWEEN 21 AND 27 THEN th.trip_id END) AS trips_latenight
       FROM routes r
       ${agencyJoin}
-      LEFT JOIN trips t ON CAST(r.route_id AS VARCHAR) = CAST(t.route_id AS VARCHAR)
+      LEFT JOIN trip_hours th ON CAST(r.route_id AS VARCHAR) = CAST(th.route_id AS VARCHAR)
       ${calendarJoin}
       GROUP BY r.route_id, r.route_short_name, r.route_long_name,
                r.route_type, r.route_color, r.route_text_color,
@@ -356,8 +406,33 @@ export async function queryStopSequenceForRoute(db: AsyncDuckDB, routeId: string
 }
 
 export async function querySegments(db: AsyncDuckDB): Promise<SegmentRow[]> {
+  const hasCalendar = await tableExists(db, 'calendar');
+  const hasDepartureTime = await columnExists(db, 'stop_times', 'departure_time');
   const conn = await db.connect();
   try {
+    const calendarJoin = hasCalendar
+      ? `LEFT JOIN calendar c ON CAST(t.service_id AS VARCHAR) = CAST(c.service_id AS VARCHAR)`
+      : '';
+    const weekdayFilter = hasCalendar ? `monday = 1 AND ` : '';
+
+    const timeCol = hasDepartureTime ? 'st.departure_time' : 'st.arrival_time';
+    const hourExpr = `CAST(SPLIT_PART(CAST(${timeCol} AS VARCHAR), ':', 1) AS INTEGER)`;
+
+    const weekdayExpr = hasCalendar
+      ? `COUNT(DISTINCT CASE WHEN monday = 1 THEN trip_id END)`
+      : `COUNT(DISTINCT trip_id)`;
+    const holidayExpr = hasCalendar
+      ? `COUNT(DISTINCT CASE WHEN sunday = 1 THEN trip_id END)`
+      : `0`;
+
+    const hourlyLines = [];
+    for (let h = 4; h <= 27; h++) {
+      const padded = String(h).padStart(2, '0');
+      hourlyLines.push(
+        `COUNT(DISTINCT CASE WHEN ${weekdayFilter}hour = ${h} THEN trip_id END) AS trips_${padded}`
+      );
+    }
+
     const result = await conn.query(`
       WITH ordered AS (
         SELECT
@@ -366,12 +441,15 @@ export async function querySegments(db: AsyncDuckDB): Promise<SegmentRow[]> {
           CAST(st.stop_id AS VARCHAR) AS stop_id,
           CAST(st.stop_sequence AS INTEGER) AS stop_sequence,
           CAST(t.trip_id AS VARCHAR) AS trip_id,
+          ${hourExpr} AS hour,
+          ${hasCalendar ? 'c.monday, c.sunday,' : ''}
           LEAD(CAST(st.stop_id AS VARCHAR)) OVER (
             PARTITION BY st.trip_id ORDER BY CAST(st.stop_sequence AS INTEGER)
           ) AS next_stop_id
         FROM stop_times st
         JOIN trips t ON CAST(st.trip_id AS VARCHAR) = CAST(t.trip_id AS VARCHAR)
         LEFT JOIN routes r ON CAST(t.route_id AS VARCHAR) = CAST(r.route_id AS VARCHAR)
+        ${calendarJoin}
       ),
       seg AS (
         SELECT
@@ -379,7 +457,13 @@ export async function querySegments(db: AsyncDuckDB): Promise<SegmentRow[]> {
           route_short_name,
           stop_id AS from_stop_id,
           next_stop_id AS to_stop_id,
-          COUNT(DISTINCT trip_id) AS trip_count
+          ${weekdayExpr} AS trip_count_weekday,
+          ${holidayExpr} AS trip_count_holiday,
+          ${hourlyLines.join(',\n          ')},
+          COUNT(DISTINCT CASE WHEN ${weekdayFilter}hour BETWEEN 4 AND 9 THEN trip_id END) AS trips_morning,
+          COUNT(DISTINCT CASE WHEN ${weekdayFilter}hour BETWEEN 10 AND 15 THEN trip_id END) AS trips_daytime,
+          COUNT(DISTINCT CASE WHEN ${weekdayFilter}hour BETWEEN 16 AND 20 THEN trip_id END) AS trips_evening,
+          COUNT(DISTINCT CASE WHEN ${weekdayFilter}hour BETWEEN 21 AND 27 THEN trip_id END) AS trips_latenight
         FROM ordered
         WHERE next_stop_id IS NOT NULL
         GROUP BY route_id, route_short_name, stop_id, next_stop_id
@@ -395,7 +479,13 @@ export async function querySegments(db: AsyncDuckDB): Promise<SegmentRow[]> {
         CAST(s2.stop_lon AS DOUBLE) AS to_stop_lon,
         seg.route_id,
         seg.route_short_name,
-        seg.trip_count
+        seg.trip_count_weekday,
+        seg.trip_count_holiday,
+        ${Array.from({ length: 24 }, (_, i) => `seg.trips_${String(i + 4).padStart(2, '0')}`).join(', ')},
+        seg.trips_morning,
+        seg.trips_daytime,
+        seg.trips_evening,
+        seg.trips_latenight
       FROM seg
       JOIN stops s1 ON CAST(s1.stop_id AS VARCHAR) = seg.from_stop_id
       JOIN stops s2 ON CAST(s2.stop_id AS VARCHAR) = seg.to_stop_id

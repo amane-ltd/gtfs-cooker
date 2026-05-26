@@ -84,7 +84,14 @@ export const LINES_DEFAULT_PROPERTIES = [
   'route_url', 'route_desc', 'agency_id', 'agency_name',
 ] as const;
 
-export const LINES_JOIN_PROPERTIES = ['trip_count_weekday', 'trip_count_holiday'] as const;
+export const LINES_JOIN_PROPERTIES = [
+  'trip_count_weekday', 'trip_count_holiday',
+  'trips_04', 'trips_05', 'trips_06', 'trips_07', 'trips_08', 'trips_09',
+  'trips_10', 'trips_11', 'trips_12', 'trips_13', 'trips_14', 'trips_15',
+  'trips_16', 'trips_17', 'trips_18', 'trips_19', 'trips_20', 'trips_21',
+  'trips_22', 'trips_23', 'trips_24', 'trips_25', 'trips_26', 'trips_27',
+  'trips_morning', 'trips_daytime', 'trips_evening', 'trips_latenight',
+] as const;
 
 export const TRIPS_DEFAULT_PROPERTIES = [
   'trip_id', 'route_id', 'service_id',
@@ -106,7 +113,13 @@ export const SEGMENTS_PROPERTIES = [
   'from_stop_id', 'from_stop_name',
   'to_stop_id', 'to_stop_name',
   'route_id', 'route_short_name',
-  'trip_count', 'distance_m',
+  'trip_count_weekday', 'trip_count_holiday',
+  'trips_04', 'trips_05', 'trips_06', 'trips_07', 'trips_08', 'trips_09',
+  'trips_10', 'trips_11', 'trips_12', 'trips_13', 'trips_14', 'trips_15',
+  'trips_16', 'trips_17', 'trips_18', 'trips_19', 'trips_20', 'trips_21',
+  'trips_22', 'trips_23', 'trips_24', 'trips_25', 'trips_26', 'trips_27',
+  'trips_morning', 'trips_daytime', 'trips_evening', 'trips_latenight',
+  'distance_m',
 ] as const;
 
 export const MATCHING_STOPS_PROPERTIES = [
