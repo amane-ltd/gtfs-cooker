@@ -76,6 +76,7 @@ export const STOPS_JOIN_PROPERTIES = [
   'trips_16', 'trips_17', 'trips_18', 'trips_19', 'trips_20', 'trips_21',
   'trips_22', 'trips_23', 'trips_24', 'trips_25', 'trips_26', 'trips_27',
   'trips_morning', 'trips_daytime', 'trips_evening', 'trips_latenight',
+  'travel_time_min', 'travel_time_route_name', 'travel_time_target_stop',
 ] as const;
 
 export const LINES_DEFAULT_PROPERTIES = [

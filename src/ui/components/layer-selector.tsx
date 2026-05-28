@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useAppStore } from '../../store/app-store';
 import { useT } from '../hooks/use-t';
 import type { LayerType, StopsDissolvedGroupBy, LinesDissolvedGroupBy } from '../../gtfs/types';
@@ -82,6 +83,18 @@ export function LayerSelector() {
   const linesDissolvedGroupBy = useAppStore(s => s.linesDissolvedGroupBy);
   const setLinesDissolvedGroupBy = useAppStore(s => s.setLinesDissolvedGroupBy);
   const hasShapes = useAppStore(s => s.gtfsSummary?.hasShapes ?? false);
+  const phase = useAppStore(s => s.phase);
+  const routeInfoList = useAppStore(s => s.routeInfoList);
+  const routeStopsByRoute = useAppStore(s => s.routeStopsByRoute);
+  const travelTimeTargets = useAppStore(s => s.travelTimeTargets);
+  const setTravelTimeTarget = useAppStore(s => s.setTravelTimeTarget);
+  const loadRouteStops = useAppStore(s => s.loadRouteStops);
+
+  useEffect(() => {
+    if (selectedLayer === 'stops' && (phase === 'loaded' || phase === 'done') && routeInfoList.length === 0) {
+      loadRouteStops();
+    }
+  }, [selectedLayer, phase, routeInfoList.length, loadRouteStops]);
 
   return (
     <div>
@@ -173,6 +186,34 @@ export function LayerSelector() {
             value={concaveMaxEdge}
             onChange={e => setConcaveMaxEdge(Number(e.target.value))}
           />
+        </div>
+      )}
+
+      {selectedLayer === 'stops' && routeInfoList.length > 0 && (
+        <div className="field" style={{ marginTop: 10 }}>
+          <span className="field-label">{t('layer.travelTimeTarget')}</span>
+          <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+            {routeInfoList.map(route => (
+              <div key={route.route_id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <span style={{ fontSize: 12, minWidth: 80, flexShrink: 0 }}>
+                  {route.route_short_name || route.route_long_name || route.route_id}
+                </span>
+                <select
+                  className="layer-select"
+                  style={{ flex: 1, fontSize: 12 }}
+                  value={travelTimeTargets[route.route_id] ?? ''}
+                  onChange={e => setTravelTimeTarget(route.route_id, e.target.value)}
+                >
+                  <option value="">{t('layer.travelTimeNone')}</option>
+                  {(routeStopsByRoute[route.route_id] ?? []).map(stop => (
+                    <option key={stop.stop_id} value={stop.stop_id}>
+                      {stop.stop_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

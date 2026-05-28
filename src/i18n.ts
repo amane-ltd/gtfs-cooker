@@ -56,6 +56,8 @@ const en = {
   'layer.concaveMaxEdge': 'Max edge length (km)',
   'layer.groupBy': 'Group by',
   'layer.groupNone': 'None (merge all)',
+  'layer.travelTimeTarget': 'Target stop (travel time)',
+  'layer.travelTimeNone': '(not set)',
 
   'props.format': 'Export format',
   'props.selectAll': 'Select all',
@@ -199,6 +201,8 @@ const ja: Dict = {
   'layer.concaveMaxEdge': '最大エッジ長 (km)',
   'layer.groupBy': 'グループ化',
   'layer.groupNone': 'なし（全体を結合）',
+  'layer.travelTimeTarget': '対象停留所（所要時間）',
+  'layer.travelTimeNone': '（未設定）',
 
   'props.format': '出力形式',
   'props.selectAll': '全選択',

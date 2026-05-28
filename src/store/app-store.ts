@@ -4,7 +4,7 @@ import type { GtfsSummary, ValidationResult, LogEntry, LayerType, MatchingOutput
 import { getAvailableProperties } from '../gtfs/types';
 import { getDb, resetDb } from '../db/init';
 import { dropAllTables, loadCsvIntoTable, getTableRowCount, tableExists } from '../db/loader';
-import { queryStops, queryShapePoints, queryRoutesWithShapes, queryTripsForDate, queryStopSequenceForRoute, querySegments } from '../db/queries';
+import { queryStops, queryShapePoints, queryRoutesWithShapes, queryTripsForDate, queryStopSequenceForRoute, querySegments, queryRouteStopLists, queryTravelTimesToStops } from '../db/queries';
 import { buildStopsGeoJSON } from '../geojson/stops';
 import { buildLinesGeoJSON } from '../geojson/lines';
 import { buildTripsGeoJSON } from '../geojson/trips';
@@ -73,6 +73,9 @@ interface AppState {
   excelSheets: string[] | null;
   excelFile: File | null;
   is3D: boolean;
+  routeInfoList: Array<{ route_id: string; route_short_name: string | null; route_long_name: string | null }>;
+  routeStopsByRoute: Record<string, Array<{ stop_id: string; stop_name: string }>>;
+  travelTimeTargets: Record<string, string>;
 
   setIs3D: (v: boolean) => void;
   setLanguage: (lang: Language) => void;
@@ -105,6 +108,8 @@ interface AppState {
   importMappingCsv: (type: MappingType, file: File) => Promise<void>;
   executeJoin: () => Promise<void>;
   clearRidership: () => Promise<void>;
+  loadRouteStops: () => Promise<void>;
+  setTravelTimeTarget: (routeId: string, stopId: string) => void;
 }
 
 const initialProperties = Object.fromEntries(
@@ -142,6 +147,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   excelSheets: null,
   excelFile: null,
   is3D: false,
+  routeInfoList: [],
+  routeStopsByRoute: {},
+  travelTimeTargets: {},
 
   setIs3D: (v) => set({ is3D: v }),
   setMatchingOutputLayer: (layer) => set({ matchingOutputLayer: layer }),
@@ -341,7 +349,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       const props = state.selectedProperties[layer] ?? [];
       const agencyName = state.gtfsSummary?.agencyNames[0] ?? null;
 
-      // Helper: build lines FeatureCollection (reused by lines-buffer, dissolved)
       async function getLinesFC() {
         const routes = await queryRoutesWithShapes(db);
         const hasShapes = await tableExists(db, 'shapes');
@@ -453,6 +460,19 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (layer === 'stops') {
         const rows = await queryStops(db);
         results.stops = buildStopsGeoJSON(rows, props, coordinatePrecision);
+        const travelTimeMap = await queryTravelTimesToStops(db, state.travelTimeTargets);
+        for (const feat of results.stops.features) {
+          const stopId = String(feat.properties?.stop_id ?? '');
+          const entry = travelTimeMap[stopId];
+          if (entry) {
+            feat.properties = {
+              ...feat.properties,
+              travel_time_min: entry.travel_time_min,
+              travel_time_route_name: entry.route_name,
+              travel_time_target_stop: entry.target_stop_name,
+            };
+          }
+        }
         await enrichStopsWithRidership(results.stops);
         addLog('info', tf('log.features', 'stops', results.stops.features.length));
       }
@@ -901,6 +921,45 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
+  loadRouteStops: async () => {
+    try {
+      const db = await getDb();
+      const conn = await db.connect();
+      let routeInfoList: Array<{ route_id: string; route_short_name: string | null; route_long_name: string | null }> = [];
+      try {
+        const res = await conn.query(`
+          SELECT CAST(route_id AS VARCHAR) AS route_id, route_short_name, route_long_name
+          FROM routes ORDER BY route_id
+        `);
+        routeInfoList = res.toArray().map(r => {
+          const obj = r.toJSON() as Record<string, unknown>;
+          return {
+            route_id: String(obj.route_id),
+            route_short_name: obj.route_short_name ? String(obj.route_short_name) : null,
+            route_long_name: obj.route_long_name ? String(obj.route_long_name) : null,
+          };
+        });
+      } finally {
+        await conn.close();
+      }
+      const rows = await queryRouteStopLists(db);
+      const stopsByRoute: Record<string, Array<{ stop_id: string; stop_name: string }>> = {};
+      for (const row of rows) {
+        if (!stopsByRoute[row.route_id]) stopsByRoute[row.route_id] = [];
+        stopsByRoute[row.route_id]!.push({ stop_id: row.stop_id, stop_name: row.stop_name });
+      }
+      set({ routeInfoList, routeStopsByRoute: stopsByRoute });
+    } catch (e) {
+      get().addLog('error', `Failed to load route stops: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  },
+
+  setTravelTimeTarget: (routeId, stopId) => {
+    set(s => ({
+      travelTimeTargets: { ...s.travelTimeTargets, [routeId]: stopId },
+    }));
+  },
+
   reset: async () => {
     await resetDb();
     set({
@@ -931,6 +990,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       joinStats: null,
       excelSheets: null,
       excelFile: null,
+      routeInfoList: [],
+      routeStopsByRoute: {},
+      travelTimeTargets: {},
     });
   },
 }));

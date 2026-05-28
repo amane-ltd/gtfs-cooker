@@ -89,7 +89,13 @@ interface SegmentRow {
   trips_latenight: number;
 }
 
-export type { StopRow, ShapePoint, RouteWithShapes, TripStopTime, SegmentRow };
+interface RouteStopEntry {
+  route_id: string;
+  stop_id: string;
+  stop_name: string;
+}
+
+export type { StopRow, ShapePoint, RouteWithShapes, TripStopTime, SegmentRow, RouteStopEntry };
 
 async function hasAgencyId(db: AsyncDuckDB): Promise<boolean> {
   const agencyExists = await tableExists(db, 'agency');
@@ -380,29 +386,136 @@ export async function queryTripsForDate(
 }
 
 export async function queryStopSequenceForRoute(db: AsyncDuckDB, routeId: string): Promise<Array<{ stop_lat: number; stop_lon: number }>> {
-  const hasDirectionId = await columnExists(db, 'trips', 'direction_id');
   const conn = await db.connect();
   try {
-    const dirFilter = hasDirectionId ? `AND t.direction_id = 0` : '';
     const result = await conn.query(`
-      WITH ranked AS (
-        SELECT
-          CAST(s.stop_lat AS DOUBLE) AS stop_lat,
-          CAST(s.stop_lon AS DOUBLE) AS stop_lon,
-          st.stop_sequence,
-          ROW_NUMBER() OVER (PARTITION BY st.stop_sequence ORDER BY t.trip_id) AS rn
-        FROM stop_times st
-        JOIN trips t ON CAST(st.trip_id AS VARCHAR) = CAST(t.trip_id AS VARCHAR)
-        JOIN stops s ON CAST(st.stop_id AS VARCHAR) = CAST(s.stop_id AS VARCHAR)
+      WITH best_trip AS (
+        SELECT CAST(t.trip_id AS VARCHAR) AS trip_id
+        FROM trips t
+        JOIN stop_times st ON CAST(t.trip_id AS VARCHAR) = CAST(st.trip_id AS VARCHAR)
         WHERE CAST(t.route_id AS VARCHAR) = '${routeId}'
-          ${dirFilter}
+        GROUP BY t.trip_id
+        ORDER BY COUNT(*) DESC
+        LIMIT 1
       )
-      SELECT stop_lat, stop_lon FROM ranked WHERE rn = 1 ORDER BY stop_sequence
+      SELECT
+        CAST(s.stop_lat AS DOUBLE) AS stop_lat,
+        CAST(s.stop_lon AS DOUBLE) AS stop_lon
+      FROM stop_times st
+      JOIN best_trip bt ON CAST(st.trip_id AS VARCHAR) = bt.trip_id
+      JOIN stops s ON CAST(st.stop_id AS VARCHAR) = CAST(s.stop_id AS VARCHAR)
+      ORDER BY CAST(st.stop_sequence AS INTEGER)
     `);
     return result.toArray().map(r => coerceBigInts(r.toJSON() as Record<string, unknown>) as unknown as { stop_lat: number; stop_lon: number });
   } finally {
     await conn.close();
   }
+}
+
+export async function queryRouteStopLists(db: AsyncDuckDB): Promise<RouteStopEntry[]> {
+  const conn = await db.connect();
+  try {
+    const result = await conn.query(`
+      SELECT
+        CAST(t.route_id AS VARCHAR) AS route_id,
+        CAST(s.stop_id AS VARCHAR) AS stop_id,
+        s.stop_name,
+        MIN(CAST(st.stop_sequence AS INTEGER)) AS min_seq
+      FROM stop_times st
+      JOIN trips t ON CAST(st.trip_id AS VARCHAR) = CAST(t.trip_id AS VARCHAR)
+      JOIN stops s ON CAST(st.stop_id AS VARCHAR) = CAST(s.stop_id AS VARCHAR)
+      GROUP BY t.route_id, s.stop_id, s.stop_name
+      ORDER BY t.route_id, min_seq
+    `);
+    return result.toArray().map(r => {
+      const obj = coerceBigInts(r.toJSON() as Record<string, unknown>);
+      return {
+        route_id: String(obj.route_id),
+        stop_id: String(obj.stop_id),
+        stop_name: String(obj.stop_name),
+      };
+    });
+  } finally {
+    await conn.close();
+  }
+}
+
+interface TravelTimeEntry {
+  travel_time_min: number;
+  route_name: string;
+  target_stop_name: string;
+}
+
+export type { TravelTimeEntry };
+
+export async function queryTravelTimesToStops(
+  db: AsyncDuckDB,
+  targets: Record<string, string>,
+): Promise<Record<string, TravelTimeEntry>> {
+  const entries = Object.entries(targets).filter(([, stopId]) => stopId);
+  if (entries.length === 0) return {};
+  const conn = await db.connect();
+  const result: Record<string, TravelTimeEntry> = {};
+  try {
+    for (const [routeId, targetStopId] of entries) {
+      const nameRes = await conn.query(
+        `SELECT stop_name FROM stops WHERE CAST(stop_id AS VARCHAR) = '${targetStopId}' LIMIT 1`
+      );
+      const nameRows = nameRes.toArray();
+      const targetStopName = nameRows.length > 0
+        ? String((nameRows[0]!.toJSON() as Record<string, unknown>).stop_name)
+        : targetStopId;
+
+      const routeRes = await conn.query(
+        `SELECT COALESCE(route_short_name, route_long_name, CAST(route_id AS VARCHAR)) AS rname FROM routes WHERE CAST(route_id AS VARCHAR) = '${routeId}' LIMIT 1`
+      );
+      const routeRows = routeRes.toArray();
+      const routeName = routeRows.length > 0
+        ? String((routeRows[0]!.toJSON() as Record<string, unknown>).rname)
+        : routeId;
+
+      const res = await conn.query(`
+        WITH trip_target AS (
+          SELECT
+            CAST(t.trip_id AS VARCHAR) AS trip_id,
+            CAST(COALESCE(st.departure_time, st.arrival_time) AS VARCHAR) AS target_time
+          FROM stop_times st
+          JOIN trips t ON CAST(st.trip_id AS VARCHAR) = CAST(t.trip_id AS VARCHAR)
+          WHERE CAST(t.route_id AS VARCHAR) = '${routeId}'
+            AND CAST(st.stop_id AS VARCHAR) = '${targetStopId}'
+        ),
+        stop_on_route AS (
+          SELECT
+            CAST(st.stop_id AS VARCHAR) AS stop_id,
+            CAST(t.trip_id AS VARCHAR) AS trip_id,
+            CAST(COALESCE(st.departure_time, st.arrival_time) AS VARCHAR) AS stop_time
+          FROM stop_times st
+          JOIN trips t ON CAST(st.trip_id AS VARCHAR) = CAST(t.trip_id AS VARCHAR)
+          WHERE CAST(t.route_id AS VARCHAR) = '${routeId}'
+        )
+        SELECT
+          s.stop_id,
+          ROUND(AVG(ABS(
+            (CAST(SPLIT_PART(tt.target_time, ':', 1) AS INTEGER) * 60 + CAST(SPLIT_PART(tt.target_time, ':', 2) AS INTEGER))
+            - (CAST(SPLIT_PART(s.stop_time, ':', 1) AS INTEGER) * 60 + CAST(SPLIT_PART(s.stop_time, ':', 2) AS INTEGER))
+          ))) AS travel_time_min
+        FROM stop_on_route s
+        JOIN trip_target tt ON s.trip_id = tt.trip_id
+        GROUP BY s.stop_id
+      `);
+      for (const row of res.toArray()) {
+        const obj = row.toJSON() as Record<string, unknown>;
+        const stopId = String(obj.stop_id);
+        const tt = Number(obj.travel_time_min);
+        if (!(stopId in result) || tt < result[stopId]!.travel_time_min) {
+          result[stopId] = { travel_time_min: tt, route_name: routeName, target_stop_name: targetStopName };
+        }
+      }
+    }
+  } finally {
+    await conn.close();
+  }
+  return result;
 }
 
 export async function querySegments(db: AsyncDuckDB): Promise<SegmentRow[]> {
