@@ -14,7 +14,7 @@ GTFS-cooker で生成できるレイヤーの一覧です。
 
 - **形状**: Point
 - **説明**: GTFS の全停留所をポイントとして出力します。
-- **主なプロパティ**: stop_id, stop_name, stop_lat, stop_lon, routes（経由路線一覧）, route_count, trip_weekday（平日便数）, trip_holiday（休日便数）, trips_morning / trips_daytime / trips_evening / trips_latenight（時間帯別便数）, trips_04〜trips_27（時間別便数）
+- **主なプロパティ**: stop_id, stop_name, stop_lat, stop_lon, routes（経由路線一覧）, route_count, trip_weekday（平日便数）, trip_holiday（休日便数）, trip_morning / trip_daytime / trip_evening / trip_latenight（時間帯別便数）, trip_04〜trip_27（時間別便数）
 
 ### Lines（路線）
 
@@ -112,11 +112,11 @@ GTFS-cooker で生成できるレイヤーの一覧です。
 
 | 時間帯 | プロパティ名 | 時間範囲 |
 |--------|-------------|---------|
-| 朝 | trips_morning | 4:00 — 8:59 |
-| 昼 | trips_daytime | 9:00 — 16:59 |
-| 夕 | trips_evening | 17:00 — 20:59 |
-| 深夜 | trips_latenight | 21:00 — 27:59 |
+| 朝 | trip_morning | 4:00 — 8:59 |
+| 昼 | trip_daytime | 9:00 — 16:59 |
+| 夕 | trip_evening | 17:00 — 20:59 |
+| 深夜 | trip_latenight | 21:00 — 27:59 |
 
 ::: info
-時間別便数（trips_04〜trips_27）と時間帯別便数はいずれも平日の便数です。時間帯別便数の合計は trip_weekday と一致します。
+時間別便数（trip_04〜trip_27）と時間帯別便数はいずれも平日の便数です。時間帯別便数の合計は trip_weekday と一致します。
 :::

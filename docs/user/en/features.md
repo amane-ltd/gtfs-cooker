@@ -14,7 +14,7 @@ A complete list of layers that GTFS-cooker can generate.
 
 - **Geometry**: Point
 - **Description**: Outputs all GTFS stops as point features.
-- **Key properties**: stop_id, stop_name, stop_lat, stop_lon, routes (list of route IDs passing through), route_count, trip_weekday (weekday trips), trip_holiday (holiday trips), trips_morning / trips_daytime / trips_evening / trips_latenight (trips by time period), trips_04–trips_27 (hourly trips)
+- **Key properties**: stop_id, stop_name, stop_lat, stop_lon, routes (list of route IDs passing through), route_count, trip_weekday (weekday trips), trip_holiday (holiday trips), trip_morning / trip_daytime / trip_evening / trip_latenight (trips by time period), trip_04–trip_27 (hourly trips)
 
 ### Lines
 
@@ -112,11 +112,11 @@ Trip counts are categorized into the following time periods:
 
 | Period | Property | Hours |
 |--------|----------|-------|
-| Morning | trips_morning | 4:00 – 8:59 |
-| Daytime | trips_daytime | 9:00 – 16:59 |
-| Evening | trips_evening | 17:00 – 20:59 |
-| Late night | trips_latenight | 21:00 – 27:59 |
+| Morning | trip_morning | 4:00 – 8:59 |
+| Daytime | trip_daytime | 9:00 – 16:59 |
+| Evening | trip_evening | 17:00 – 20:59 |
+| Late night | trip_latenight | 21:00 – 27:59 |
 
 ::: info
-Hourly trip counts (trips_04–trips_27) and time-period trip counts are both weekday counts. The sum of time-period counts equals trip_weekday.
+Hourly trip counts (trip_04–trip_27) and time-period trip counts are both weekday counts. The sum of time-period counts equals trip_weekday.
 :::
