@@ -71,11 +71,11 @@ export const STOPS_DEFAULT_PROPERTIES = [
 export const STOPS_JOIN_PROPERTIES = [
   'routes', 'agency_name', 'route_count',
   'trip_weekday', 'trip_holiday',
-  'trips_04', 'trips_05', 'trips_06', 'trips_07', 'trips_08', 'trips_09',
-  'trips_10', 'trips_11', 'trips_12', 'trips_13', 'trips_14', 'trips_15',
-  'trips_16', 'trips_17', 'trips_18', 'trips_19', 'trips_20', 'trips_21',
-  'trips_22', 'trips_23', 'trips_24', 'trips_25', 'trips_26', 'trips_27',
-  'trips_morning', 'trips_daytime', 'trips_evening', 'trips_latenight',
+  'trip_morning', 'trip_daytime', 'trip_evening', 'trip_latenight',
+  'trip_04', 'trip_05', 'trip_06', 'trip_07', 'trip_08', 'trip_09',
+  'trip_10', 'trip_11', 'trip_12', 'trip_13', 'trip_14', 'trip_15',
+  'trip_16', 'trip_17', 'trip_18', 'trip_19', 'trip_20', 'trip_21',
+  'trip_22', 'trip_23', 'trip_24', 'trip_25', 'trip_26', 'trip_27',
   'travel_time_min', 'travel_time_route_name', 'travel_time_target_stop',
 ] as const;
 
@@ -87,11 +87,11 @@ export const LINES_DEFAULT_PROPERTIES = [
 
 export const LINES_JOIN_PROPERTIES = [
   'trip_weekday', 'trip_holiday',
-  'trips_04', 'trips_05', 'trips_06', 'trips_07', 'trips_08', 'trips_09',
-  'trips_10', 'trips_11', 'trips_12', 'trips_13', 'trips_14', 'trips_15',
-  'trips_16', 'trips_17', 'trips_18', 'trips_19', 'trips_20', 'trips_21',
-  'trips_22', 'trips_23', 'trips_24', 'trips_25', 'trips_26', 'trips_27',
-  'trips_morning', 'trips_daytime', 'trips_evening', 'trips_latenight',
+  'trip_morning', 'trip_daytime', 'trip_evening', 'trip_latenight',
+  'trip_04', 'trip_05', 'trip_06', 'trip_07', 'trip_08', 'trip_09',
+  'trip_10', 'trip_11', 'trip_12', 'trip_13', 'trip_14', 'trip_15',
+  'trip_16', 'trip_17', 'trip_18', 'trip_19', 'trip_20', 'trip_21',
+  'trip_22', 'trip_23', 'trip_24', 'trip_25', 'trip_26', 'trip_27',
 ] as const;
 
 export const TRIPS_DEFAULT_PROPERTIES = [
@@ -111,30 +111,57 @@ export const AREA_PROPERTIES = ['agency_name'] as const;
 export const ENVELOPE_PROPERTIES = ['agency_name', 'bbox'] as const;
 
 export const SEGMENTS_PROPERTIES = [
-  'from_stop_id', 'from_stop_name',
-  'to_stop_id', 'to_stop_name',
+  'from_stop_id', 'from_stop_name', 'from_stop_lat', 'from_stop_lon',
+  'to_stop_id', 'to_stop_name', 'to_stop_lat', 'to_stop_lon',
   'route_id', 'route_short_name',
   'trip_weekday', 'trip_holiday',
-  'trips_04', 'trips_05', 'trips_06', 'trips_07', 'trips_08', 'trips_09',
-  'trips_10', 'trips_11', 'trips_12', 'trips_13', 'trips_14', 'trips_15',
-  'trips_16', 'trips_17', 'trips_18', 'trips_19', 'trips_20', 'trips_21',
-  'trips_22', 'trips_23', 'trips_24', 'trips_25', 'trips_26', 'trips_27',
-  'trips_morning', 'trips_daytime', 'trips_evening', 'trips_latenight',
+  'trip_morning', 'trip_daytime', 'trip_evening', 'trip_latenight',
+  'trip_04', 'trip_05', 'trip_06', 'trip_07', 'trip_08', 'trip_09',
+  'trip_10', 'trip_11', 'trip_12', 'trip_13', 'trip_14', 'trip_15',
+  'trip_16', 'trip_17', 'trip_18', 'trip_19', 'trip_20', 'trip_21',
+  'trip_22', 'trip_23', 'trip_24', 'trip_25', 'trip_26', 'trip_27',
   'distance_m',
 ] as const;
 
+const RIDERSHIP_HOURLY_PROPERTIES = [
+  'ridership_morning', 'ridership_daytime', 'ridership_evening', 'ridership_latenight',
+  'ridership_04', 'ridership_05', 'ridership_06', 'ridership_07', 'ridership_08', 'ridership_09',
+  'ridership_10', 'ridership_11', 'ridership_12', 'ridership_13', 'ridership_14', 'ridership_15',
+  'ridership_16', 'ridership_17', 'ridership_18', 'ridership_19', 'ridership_20', 'ridership_21',
+  'ridership_22', 'ridership_23', 'ridership_24', 'ridership_25', 'ridership_26', 'ridership_27',
+] as const;
+
+const RIDERSHIP_PER_TRIP_PROPERTIES = [
+  'ridership_per_trip',
+  'ridership_per_trip_morning', 'ridership_per_trip_daytime', 'ridership_per_trip_evening', 'ridership_per_trip_latenight',
+  'ridership_per_trip_04', 'ridership_per_trip_05', 'ridership_per_trip_06', 'ridership_per_trip_07',
+  'ridership_per_trip_08', 'ridership_per_trip_09', 'ridership_per_trip_10', 'ridership_per_trip_11',
+  'ridership_per_trip_12', 'ridership_per_trip_13', 'ridership_per_trip_14', 'ridership_per_trip_15',
+  'ridership_per_trip_16', 'ridership_per_trip_17', 'ridership_per_trip_18', 'ridership_per_trip_19',
+  'ridership_per_trip_20', 'ridership_per_trip_21', 'ridership_per_trip_22', 'ridership_per_trip_23',
+  'ridership_per_trip_24', 'ridership_per_trip_25', 'ridership_per_trip_26', 'ridership_per_trip_27',
+] as const;
+
+export { RIDERSHIP_HOURLY_PROPERTIES, RIDERSHIP_PER_TRIP_PROPERTIES };
+
 export const MATCHING_STOPS_PROPERTIES = [
   'stop_id', 'stop_name', 'ridership_on', 'ridership_off',
+  ...RIDERSHIP_HOURLY_PROPERTIES,
+  ...RIDERSHIP_PER_TRIP_PROPERTIES,
 ] as const;
 
 export const MATCHING_LINES_PROPERTIES = [
   'route_id', 'route_short_name', 'route_long_name', 'ridership_count',
+  ...RIDERSHIP_HOURLY_PROPERTIES,
+  ...RIDERSHIP_PER_TRIP_PROPERTIES,
 ] as const;
 
 export const MATCHING_SEGMENTS_PROPERTIES = [
-  'from_stop_id', 'from_stop_name',
-  'to_stop_id', 'to_stop_name',
+  'from_stop_id', 'from_stop_name', 'from_stop_lat', 'from_stop_lon',
+  'to_stop_id', 'to_stop_name', 'to_stop_lat', 'to_stop_lon',
   'ridership',
+  ...RIDERSHIP_HOURLY_PROPERTIES,
+  ...RIDERSHIP_PER_TRIP_PROPERTIES,
 ] as const;
 
 export const MATCHING_FLOW_PROPERTIES = [
@@ -143,6 +170,7 @@ export const MATCHING_FLOW_PROPERTIES = [
   'alighting_stop_id', 'alighting_stop_name',
   'alighting_lat', 'alighting_lon',
   'ridership',
+  ...RIDERSHIP_HOURLY_PROPERTIES,
 ] as const;
 
 export const MATCHING_OD_PROPERTIES = [

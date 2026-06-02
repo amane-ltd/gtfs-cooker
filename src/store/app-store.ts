@@ -25,7 +25,7 @@ import { detectRidershipFormat } from '../ridership/detect-format';
 import { autoMatch } from '../ridership/auto-match';
 import { loadRidershipCsv, loadMappingRows, loadMappingCsv, dropRidershipTables } from '../db/ridership-loader';
 import { defaultFieldConfig } from '../ridership/detect-format';
-import { queryDistinctOdValues, queryGtfsStopGroups, queryGtfsRoutesForMatch, queryGtfsAgenciesForMatch, executeRidershipJoin, queryRidershipFlows, queryRidershipArcs } from '../db/ridership-queries';
+import { queryDistinctOdValues, queryGtfsStopGroups, queryGtfsRoutesForMatch, queryGtfsAgenciesForMatch, executeRidershipJoin, queryRidershipFlows, queryRidershipArcs, HOUR_KEYS } from '../db/ridership-queries';
 import type { RidershipArcRow } from '../db/ridership-queries';
 
 export type Phase = 'idle' | 'loading' | 'loaded' | 'generating' | 'done';
@@ -70,6 +70,8 @@ interface AppState {
   gtfsCandidates: Record<MappingType, CandidateGroup[]>;
   joinStats: JoinStats | null;
   matchingOutputLayer: MatchingOutputLayer;
+  matchingRouteFilter: string;
+  matchingShowRidershipPerTrip: boolean;
   excelSheets: string[] | null;
   excelFile: File | null;
   is3D: boolean;
@@ -89,6 +91,8 @@ interface AppState {
   setStopsDissolvedGroupBy: (g: StopsDissolvedGroupBy) => void;
   setLinesDissolvedGroupBy: (g: LinesDissolvedGroupBy) => void;
   setMatchingOutputLayer: (layer: MatchingOutputLayer) => void;
+  setMatchingRouteFilter: (filter: string) => void;
+  setMatchingShowRidershipPerTrip: (v: boolean) => void;
   setSelectedProperties: (layer: LayerType, props: string[]) => void;
   setExportFormat: (f: ExportFormat) => void;
   loadGtfsFile: (file: File) => Promise<void>;
@@ -144,6 +148,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   gtfsCandidates: { stop: [], route: [], agency: [] },
   joinStats: null,
   matchingOutputLayer: 'matching-stops' as MatchingOutputLayer,
+  matchingRouteFilter: '',
+  matchingShowRidershipPerTrip: false,
   excelSheets: null,
   excelFile: null,
   is3D: false,
@@ -153,6 +159,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setIs3D: (v) => set({ is3D: v }),
   setMatchingOutputLayer: (layer) => set({ matchingOutputLayer: layer }),
+  setMatchingRouteFilter: (filter) => set({ matchingRouteFilter: filter }),
+  setMatchingShowRidershipPerTrip: (v) => set({ matchingShowRidershipPerTrip: v }),
 
   setLanguage: (lang) => {
     setI18nLanguage(lang);
@@ -380,18 +388,51 @@ export const useAppStore = create<AppState>((set, get) => ({
       const hasRidershipRoutes = await tableExists(db, 'ridership_by_route');
       const hasRidershipSegments = await tableExists(db, 'ridership_by_segment');
       const rFieldConfig = state.fieldConfig;
+      const showRatio = state.matchingShowRidershipPerTrip;
+
+      const hourlyCols = HOUR_KEYS.map(k => `ridership_${k}`);
+
+      function extractHourly(o: Record<string, unknown>): Record<string, number> {
+        const out: Record<string, number> = {};
+        for (const c of hourlyCols) {
+          if (o[c] !== undefined && o[c] !== null) out[c] = Number(o[c]);
+        }
+        return out;
+      }
+
+      const round3 = (x: number): number => Math.round(x * 1000) / 1000;
+
+      function attachRatioCols(
+        target: Record<string, unknown>,
+        ridership: number | undefined,
+        hourly: Record<string, number>,
+      ): void {
+        if (!showRatio) return;
+        const tripTotal = Number(target['trip_weekday'] ?? 0) + Number(target['trip_holiday'] ?? 0);
+        target['ridership_per_trip'] = ridership !== undefined && tripTotal > 0
+          ? round3(ridership / tripTotal)
+          : null;
+        for (const k of HOUR_KEYS) {
+          const r = hourly[`ridership_${k}`];
+          const t = Number(target[`trip_${k}`] ?? 0);
+          target[`ridership_per_trip_${k}`] = r !== undefined && t > 0
+            ? round3(r / t)
+            : null;
+        }
+      }
 
       async function enrichStopsWithRidership(fc: FeatureCollection) {
         if (!hasRidershipStops) return fc;
         const conn2 = await db.connect();
         try {
-          const res = await conn2.query(`SELECT gtfs_stop_val, count_on, count_off FROM ridership_by_stop`);
-          const map = new Map<string, { count_on: number; count_off: number }>();
+          const res = await conn2.query(`SELECT * FROM ridership_by_stop`);
+          const map = new Map<string, { count_on: number; count_off: number; hourly: Record<string, number> }>();
           for (const row of res.toArray()) {
             const o = row.toJSON() as Record<string, unknown>;
             map.set(String(o.gtfs_stop_val), {
               count_on: Number(o.count_on ?? 0),
               count_off: Number(o.count_off ?? 0),
+              hourly: extractHourly(o),
             });
           }
           const matchProp = rFieldConfig?.stopGtfsField ?? 'stop_name';
@@ -399,7 +440,9 @@ export const useAppStore = create<AppState>((set, get) => ({
             const sid = String(feat.properties?.[matchProp] ?? '');
             const r = map.get(sid);
             if (r) {
-              feat.properties = { ...feat.properties, ridership_on: r.count_on, ridership_off: r.count_off };
+              const props = { ...feat.properties, ridership_on: r.count_on, ridership_off: r.count_off, ...r.hourly };
+              attachRatioCols(props, r.count_on + r.count_off, r.hourly);
+              feat.properties = props;
             }
           }
         } finally {
@@ -412,18 +455,23 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (!hasRidershipRoutes) return fc;
         const conn2 = await db.connect();
         try {
-          const res = await conn2.query(`SELECT gtfs_route_val, ridership_count FROM ridership_by_route`);
-          const map = new Map<string, number>();
+          const res = await conn2.query(`SELECT * FROM ridership_by_route`);
+          const map = new Map<string, { count: number; hourly: Record<string, number> }>();
           for (const row of res.toArray()) {
             const o = row.toJSON() as Record<string, unknown>;
-            map.set(String(o.gtfs_route_val), Number(o.ridership_count ?? 0));
+            map.set(String(o.gtfs_route_val), {
+              count: Number(o.ridership_count ?? 0),
+              hourly: extractHourly(o),
+            });
           }
           const matchProp = rFieldConfig?.routeGtfsField ?? 'route_long_name';
           for (const feat of fc.features) {
             const rid = String(feat.properties?.[matchProp] ?? '');
-            const count = map.get(rid);
-            if (count !== undefined) {
-              feat.properties = { ...feat.properties, ridership_count: count };
+            const entry = map.get(rid);
+            if (entry !== undefined) {
+              const props = { ...feat.properties, ridership_count: entry.count, ...entry.hourly };
+              attachRatioCols(props, entry.count, entry.hourly);
+              feat.properties = props;
             }
           }
         } finally {
@@ -436,19 +484,24 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (!hasRidershipSegments) return fc;
         const conn2 = await db.connect();
         try {
-          const res = await conn2.query(`SELECT from_stop_val, to_stop_val, riders FROM ridership_by_segment`);
-          const map = new Map<string, number>();
+          const res = await conn2.query(`SELECT * FROM ridership_by_segment`);
+          const map = new Map<string, { riders: number; hourly: Record<string, number> }>();
           for (const row of res.toArray()) {
             const o = row.toJSON() as Record<string, unknown>;
-            map.set(`${o.from_stop_val}->${o.to_stop_val}`, Number(o.riders ?? 0));
+            map.set(`${o.from_stop_val}->${o.to_stop_val}`, {
+              riders: Number(o.riders ?? 0),
+              hourly: extractHourly(o),
+            });
           }
           const matchProp = rFieldConfig?.stopGtfsField === 'stop_name' ? 'from_stop_name' : 'from_stop_id';
           const matchProp2 = rFieldConfig?.stopGtfsField === 'stop_name' ? 'to_stop_name' : 'to_stop_id';
           for (const feat of fc.features) {
             const key = `${feat.properties?.[matchProp]}->${feat.properties?.[matchProp2]}`;
-            const riders = map.get(key);
-            if (riders !== undefined) {
-              feat.properties = { ...feat.properties, ridership: riders };
+            const entry = map.get(key);
+            if (entry !== undefined) {
+              const props = { ...feat.properties, ridership: entry.riders, ...entry.hourly };
+              attachRatioCols(props, entry.riders, entry.hourly);
+              feat.properties = props;
             }
           }
         } finally {
@@ -586,10 +639,51 @@ export const useAppStore = create<AppState>((set, get) => ({
         addLog('info', tf('log.features', 'segments', results.segments.features.length));
       }
 
+      const routeFilterRaw = state.matchingRouteFilter.trim();
+      function applyRouteFilter(fc: FeatureCollection, ...routeProps: string[]): FeatureCollection {
+        if (!routeFilterRaw) return fc;
+        const needle = routeFilterRaw.toLowerCase();
+        fc.features = fc.features.filter(f => {
+          for (const key of routeProps) {
+            const v = f.properties?.[key];
+            if (v != null && String(v).toLowerCase().includes(needle)) return true;
+          }
+          return false;
+        });
+        return fc;
+      }
+
+      async function applyRouteFilterByStop(fc: FeatureCollection): Promise<FeatureCollection> {
+        if (!routeFilterRaw) return fc;
+        const conn2 = await db.connect();
+        try {
+          const needle = routeFilterRaw.replace(/'/g, "''").toLowerCase();
+          const res = await conn2.query(`
+            SELECT DISTINCT CAST(st.stop_id AS VARCHAR) AS stop_id
+            FROM stop_times st
+            JOIN trips t ON CAST(st.trip_id AS VARCHAR) = CAST(t.trip_id AS VARCHAR)
+            LEFT JOIN routes r ON CAST(t.route_id AS VARCHAR) = CAST(r.route_id AS VARCHAR)
+            WHERE LOWER(CAST(t.route_id AS VARCHAR)) LIKE '%${needle}%'
+               OR LOWER(COALESCE(r.route_short_name, '')) LIKE '%${needle}%'
+               OR LOWER(COALESCE(r.route_long_name, '')) LIKE '%${needle}%'
+          `);
+          const allowedStops = new Set<string>();
+          for (const row of res.toArray()) {
+            const o = row.toJSON() as Record<string, unknown>;
+            allowedStops.add(String(o.stop_id));
+          }
+          fc.features = fc.features.filter(f => allowedStops.has(String(f.properties?.stop_id ?? '')));
+        } finally {
+          await conn2.close();
+        }
+        return fc;
+      }
+
       if (layer === 'matching-stops') {
         const rows = await queryStops(db);
         const stopsFC = buildStopsGeoJSON(rows, [...getAvailableProperties('stops')], coordinatePrecision);
         await enrichStopsWithRidership(stopsFC);
+        await applyRouteFilterByStop(stopsFC);
         results['matching-stops'] = stopsFC;
         addLog('info', tf('log.features', 'matching-stops', stopsFC.features.length));
       }
@@ -597,6 +691,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (layer === 'matching-lines') {
         const linesFC = await getLinesFC();
         await enrichRoutesWithRidership(linesFC);
+        applyRouteFilter(linesFC, 'route_id', 'route_short_name', 'route_long_name');
         results['matching-lines'] = linesFC;
         addLog('info', tf('log.features', 'matching-lines', linesFC.features.length));
       }
@@ -605,6 +700,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         const segRows = await querySegments(db);
         const segFC = buildSegmentsGeoJSON(segRows, [...getAvailableProperties('segments')], coordinatePrecision);
         await enrichSegmentsWithRidership(segFC);
+        applyRouteFilter(segFC, 'route_id', 'route_short_name');
         results['matching-segments'] = segFC;
         addLog('info', tf('log.features', 'matching-segments', segFC.features.length));
       }
@@ -629,6 +725,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             alighting_lat: r.alighting_lat,
             alighting_lon: r.alighting_lon,
             [valueKey]: r.value,
+            ...(r.hourly ?? {}),
           },
         }));
         return makeFeatureCollection(features);
@@ -987,6 +1084,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       agencyMapping: [],
       gtfsCandidates: { stop: [], route: [], agency: [] },
       matchingOutputLayer: 'matching-stops' as MatchingOutputLayer,
+      matchingRouteFilter: '',
+      matchingShowRidershipPerTrip: false,
       joinStats: null,
       excelSheets: null,
       excelFile: null,

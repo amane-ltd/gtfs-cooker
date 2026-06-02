@@ -34,7 +34,11 @@ function getAvailableMatchingLayers(fieldConfig: RidershipFieldConfig | null): S
     available.add('matching-segments');
     available.add('matching-flow');
     available.add('matching-od');
-  } else if (fieldConfig.boardingStopCol && fieldConfig.tripIdCol && fieldConfig.stopSequenceCol) {
+  } else if (
+    fieldConfig.boardingStopCol &&
+    fieldConfig.tripIdCol &&
+    fieldConfig.timeCol
+  ) {
     available.add('matching-segments');
   }
   return available;
@@ -239,12 +243,6 @@ function FieldConfigPanel() {
                 onChange={v => update({ tripIdCol: v })}
               />
               <ColumnSelect
-                label={t('ridership.stopSequenceCol')}
-                value={fieldConfig.stopSequenceCol}
-                columns={columns}
-                onChange={v => update({ stopSequenceCol: v })}
-              />
-              <ColumnSelect
                 label={t('ridership.passThroughCol')}
                 value={fieldConfig.passThroughCol}
                 columns={columns}
@@ -252,6 +250,17 @@ function FieldConfigPanel() {
               />
             </div>
           )}
+
+          <div className="field-config-group">
+            <ColumnSelect
+              label={format === 'stop-trip-detail'
+                ? `${t('ridership.timeCol')} *`
+                : t('ridership.timeCol')}
+              value={fieldConfig.timeCol}
+              columns={columns}
+              onChange={v => update({ timeCol: v })}
+            />
+          </div>
         </div>
       )}
     </div>
@@ -470,6 +479,10 @@ export function RidershipPanel() {
   const joinStats = useAppStore(s => s.joinStats);
   const matchingOutputLayer = useAppStore(s => s.matchingOutputLayer);
   const setMatchingOutputLayer = useAppStore(s => s.setMatchingOutputLayer);
+  const matchingRouteFilter = useAppStore(s => s.matchingRouteFilter);
+  const setMatchingRouteFilter = useAppStore(s => s.setMatchingRouteFilter);
+  const matchingShowRidershipPerTrip = useAppStore(s => s.matchingShowRidershipPerTrip);
+  const setMatchingShowRidershipPerTrip = useAppStore(s => s.setMatchingShowRidershipPerTrip);
 
   const progress = useAppStore(s => s.progress);
   const [dragover, setDragover] = useState(false);
@@ -583,6 +596,29 @@ export function RidershipPanel() {
               </select>
             </div>
           )}
+
+          {/* (C2) Route filter */}
+          <div className="field" style={{ marginTop: 8 }}>
+            <span className="field-label">{t('ridership.routeFilter')}</span>
+            <input
+              type="text"
+              value={matchingRouteFilter}
+              onChange={e => setMatchingRouteFilter(e.target.value)}
+              placeholder={t('layer.routePlaceholder')}
+            />
+          </div>
+
+          {/* (C3) Ridership per trip toggle */}
+          <div className="field" style={{ marginTop: 8 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+              <input
+                type="checkbox"
+                checked={matchingShowRidershipPerTrip}
+                onChange={e => setMatchingShowRidershipPerTrip(e.target.checked)}
+              />
+              {t('ridership.perTripToggle')}
+            </label>
+          </div>
 
           {/* (D) Reconciliation */}
           <div className="field">

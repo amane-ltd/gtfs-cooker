@@ -65,6 +65,7 @@ export interface RidershipFieldConfig {
   countOffCol: string | null;
 
   tripIdCol: string | null;
-  stopSequenceCol: string | null;
   passThroughCol: string | null;
+
+  timeCol: string | null;
 }

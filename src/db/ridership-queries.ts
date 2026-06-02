@@ -1,5 +1,5 @@
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
-import { tableExists } from './loader';
+import { tableExists, columnExists } from './loader';
 import type { RidershipFieldConfig, JoinStats, RouteGtfsField, AgencyGtfsField, StopGtfsField, CandidateGroup } from '../ridership/types';
 import type { ReconciliationMode } from '../ridership/types';
 
@@ -147,6 +147,39 @@ function buildCountExpr(config: RidershipFieldConfig, alias: string): string {
   return '1';
 }
 
+function buildHourExpr(timeCol: string | null, alias: string): string {
+  if (!timeCol) return 'CAST(NULL AS INTEGER)';
+  const s = `CAST(${alias}.${esc(timeCol)} AS VARCHAR)`;
+  return `COALESCE(
+    TRY_CAST(SPLIT_PART(SPLIT_PART(${s}, 'T', 2), ':', 1) AS INTEGER),
+    TRY_CAST(SPLIT_PART(SPLIT_PART(${s}, ' ', 2), ':', 1) AS INTEGER),
+    TRY_CAST(SPLIT_PART(${s}, ':', 1) AS INTEGER),
+    TRY_CAST(${s} AS INTEGER)
+  )`;
+}
+
+/** Hourly + period SUM(...) expressions wrapping a per-row numeric value. */
+function buildHourlySumCols(perRowExpr: string, hourExpr: string, prefix: string): string[] {
+  const cols: string[] = [];
+  for (let h = 4; h <= 27; h++) {
+    const padded = String(h).padStart(2, '0');
+    cols.push(`SUM(CASE WHEN ${hourExpr} = ${h} THEN ${perRowExpr} ELSE 0 END) AS ${prefix}_${padded}`);
+  }
+  cols.push(`SUM(CASE WHEN ${hourExpr} BETWEEN 4 AND 8 THEN ${perRowExpr} ELSE 0 END) AS ${prefix}_morning`);
+  cols.push(`SUM(CASE WHEN ${hourExpr} BETWEEN 9 AND 16 THEN ${perRowExpr} ELSE 0 END) AS ${prefix}_daytime`);
+  cols.push(`SUM(CASE WHEN ${hourExpr} BETWEEN 17 AND 20 THEN ${perRowExpr} ELSE 0 END) AS ${prefix}_evening`);
+  cols.push(`SUM(CASE WHEN ${hourExpr} BETWEEN 21 AND 27 THEN ${perRowExpr} ELSE 0 END) AS ${prefix}_latenight`);
+  return cols;
+}
+
+const HOUR_KEYS: string[] = (() => {
+  const arr: string[] = ['morning', 'daytime', 'evening', 'latenight'];
+  for (let h = 4; h <= 27; h++) arr.push(String(h).padStart(2, '0'));
+  return arr;
+})();
+
+export { HOUR_KEYS };
+
 export async function executeRidershipJoin(
   db: AsyncDuckDB,
   config: RidershipFieldConfig,
@@ -160,6 +193,7 @@ export async function executeRidershipJoin(
     const countExpr = buildCountExpr(config, 'r');
     const stopField = esc(config.stopGtfsField);
     const routeField = esc(config.routeGtfsField);
+    const hourExpr = buildHourExpr(config.timeCol, 'r');
 
     // ── ridership_by_stop ──────────────────────────
     await conn.query(`DROP TABLE IF EXISTS ridership_by_stop`);
@@ -179,73 +213,66 @@ export async function executeRidershipJoin(
           : '';
         const stopIdOff = hasStopMap ? 'sma.gtfs_value' : `CAST(r.${alightCol} AS VARCHAR)`;
 
-        if (config.countOnCol && config.countOffCol) {
-          const onExpr = `SUM(COALESCE(TRY_CAST(r.${esc(config.countOnCol)} AS INTEGER), 0))`;
-          const offExpr = `SUM(COALESCE(TRY_CAST(r.${esc(config.countOffCol)} AS INTEGER), 0))`;
-          await conn.query(`
-            CREATE TABLE ridership_by_stop AS
-            WITH boarding AS (
-              SELECT ${stopIdOn} AS gtfs_stop_val, ${onExpr} AS count_on
-              FROM ridership r ${stopJoinOn}
-              WHERE ${stopIdOn} IS NOT NULL
-              GROUP BY ${stopIdOn}
-            ),
-            alighting AS (
-              SELECT ${stopIdOff} AS gtfs_stop_val, ${offExpr} AS count_off
-              FROM ridership r ${stopJoinOff}
-              WHERE ${stopIdOff} IS NOT NULL
-              GROUP BY ${stopIdOff}
-            )
-            SELECT COALESCE(b.gtfs_stop_val, a.gtfs_stop_val) AS gtfs_stop_val,
-                   COALESCE(b.count_on, 0) AS count_on,
-                   COALESCE(a.count_off, 0) AS count_off
-            FROM boarding b FULL OUTER JOIN alighting a ON b.gtfs_stop_val = a.gtfs_stop_val
-          `);
-        } else {
-          await conn.query(`
-            CREATE TABLE ridership_by_stop AS
-            WITH boarding AS (
-              SELECT ${stopIdOn} AS gtfs_stop_val,
-                     SUM(${countExpr}) AS count_on
-              FROM ridership r ${stopJoinOn}
-              WHERE ${stopIdOn} IS NOT NULL
-              GROUP BY ${stopIdOn}
-            ),
-            alighting AS (
-              SELECT ${stopIdOff} AS gtfs_stop_val,
-                     SUM(${countExpr}) AS count_off
-              FROM ridership r ${stopJoinOff}
-              WHERE ${stopIdOff} IS NOT NULL
-              GROUP BY ${stopIdOff}
-            )
-            SELECT COALESCE(b.gtfs_stop_val, a.gtfs_stop_val) AS gtfs_stop_val,
-                   COALESCE(b.count_on, 0) AS count_on,
-                   COALESCE(a.count_off, 0) AS count_off
-            FROM boarding b FULL OUTER JOIN alighting a ON b.gtfs_stop_val = a.gtfs_stop_val
-          `);
-        }
+        const onPerRow = config.countOnCol
+          ? `COALESCE(TRY_CAST(r.${esc(config.countOnCol)} AS INTEGER), 0)`
+          : countExpr;
+        const offPerRow = config.countOffCol
+          ? `COALESCE(TRY_CAST(r.${esc(config.countOffCol)} AS INTEGER), 0)`
+          : countExpr;
+        const onTotal = `SUM(${onPerRow})`;
+        const offTotal = `SUM(${offPerRow})`;
+        const onHourlyCols = buildHourlySumCols(onPerRow, hourExpr, 'on');
+        const offHourlyCols = buildHourlySumCols(offPerRow, hourExpr, 'off');
+        const ridershipHourlyExprs = HOUR_KEYS.map(
+          k => `COALESCE(b.on_${k}, 0) + COALESCE(a.off_${k}, 0) AS ridership_${k}`,
+        );
+
+        await conn.query(`
+          CREATE TABLE ridership_by_stop AS
+          WITH boarding AS (
+            SELECT ${stopIdOn} AS gtfs_stop_val,
+                   ${onTotal} AS count_on,
+                   ${onHourlyCols.join(',\n                   ')}
+            FROM ridership r ${stopJoinOn}
+            WHERE ${stopIdOn} IS NOT NULL
+            GROUP BY ${stopIdOn}
+          ),
+          alighting AS (
+            SELECT ${stopIdOff} AS gtfs_stop_val,
+                   ${offTotal} AS count_off,
+                   ${offHourlyCols.join(',\n                   ')}
+            FROM ridership r ${stopJoinOff}
+            WHERE ${stopIdOff} IS NOT NULL
+            GROUP BY ${stopIdOff}
+          )
+          SELECT COALESCE(b.gtfs_stop_val, a.gtfs_stop_val) AS gtfs_stop_val,
+                 COALESCE(b.count_on, 0) AS count_on,
+                 COALESCE(a.count_off, 0) AS count_off,
+                 ${ridershipHourlyExprs.join(',\n                 ')}
+          FROM boarding b FULL OUTER JOIN alighting a ON b.gtfs_stop_val = a.gtfs_stop_val
+        `);
       } else {
-        if (config.countOnCol && config.countOffCol) {
-          await conn.query(`
-            CREATE TABLE ridership_by_stop AS
-            SELECT ${stopIdOn} AS gtfs_stop_val,
-                   SUM(COALESCE(TRY_CAST(r.${esc(config.countOnCol)} AS INTEGER), 0)) AS count_on,
-                   SUM(COALESCE(TRY_CAST(r.${esc(config.countOffCol)} AS INTEGER), 0)) AS count_off
-            FROM ridership r ${stopJoinOn}
-            WHERE ${stopIdOn} IS NOT NULL
-            GROUP BY ${stopIdOn}
-          `);
-        } else {
-          await conn.query(`
-            CREATE TABLE ridership_by_stop AS
-            SELECT ${stopIdOn} AS gtfs_stop_val,
-                   SUM(${countExpr}) AS count_on,
-                   0 AS count_off
-            FROM ridership r ${stopJoinOn}
-            WHERE ${stopIdOn} IS NOT NULL
-            GROUP BY ${stopIdOn}
-          `);
-        }
+        const onPerRow = config.countOnCol
+          ? `COALESCE(TRY_CAST(r.${esc(config.countOnCol)} AS INTEGER), 0)`
+          : countExpr;
+        const offPerRow = config.countOffCol
+          ? `COALESCE(TRY_CAST(r.${esc(config.countOffCol)} AS INTEGER), 0)`
+          : '0';
+        const onTotal = `SUM(${onPerRow})`;
+        const offTotal = config.countOffCol ? `SUM(${offPerRow})` : '0';
+        const totalPerRow = config.countOffCol ? `(${onPerRow} + ${offPerRow})` : onPerRow;
+        const ridershipHourlyCols = buildHourlySumCols(totalPerRow, hourExpr, 'ridership');
+
+        await conn.query(`
+          CREATE TABLE ridership_by_stop AS
+          SELECT ${stopIdOn} AS gtfs_stop_val,
+                 ${onTotal} AS count_on,
+                 ${offTotal} AS count_off,
+                 ${ridershipHourlyCols.join(',\n                 ')}
+          FROM ridership r ${stopJoinOn}
+          WHERE ${stopIdOn} IS NOT NULL
+          GROUP BY ${stopIdOn}
+        `);
       }
     }
 
@@ -259,10 +286,13 @@ export async function executeRidershipJoin(
         : '';
       const routeId = hasRouteMap ? 'rm.gtfs_value' : `CAST(r.${routeColE} AS VARCHAR)`;
 
+      const routeHourlyCols = buildHourlySumCols(countExpr, hourExpr, 'ridership');
+
       await conn.query(`
         CREATE TABLE ridership_by_route AS
         SELECT ${routeId} AS gtfs_route_val,
-               SUM(${countExpr}) AS ridership_count
+               SUM(${countExpr}) AS ridership_count,
+               ${routeHourlyCols.join(',\n               ')}
         FROM ridership r ${routeJoin}
         WHERE ${routeId} IS NOT NULL
         GROUP BY ${routeId}
@@ -273,6 +303,10 @@ export async function executeRidershipJoin(
     await conn.query(`DROP TABLE IF EXISTS ridership_by_segment`);
 
     if (config.boardingStopCol && config.alightingStopCol) {
+      // OD-style ridership_by_segment:
+      //   各 OD ペアを GTFS の路線停留所列に沿って隣接区間に展開し、
+      //   通過する全区間に乗客数を積み上げる。direction_id がある場合は
+      //   方向別に正準 trip を選び、両方向の区間それぞれで集計する。
       const boardCol = esc(config.boardingStopCol);
       const alightCol = esc(config.alightingStopCol);
 
@@ -284,19 +318,120 @@ export async function executeRidershipJoin(
         : '';
       const stopIdOn = hasStopMap ? 'smb.gtfs_value' : `CAST(r.${boardCol} AS VARCHAR)`;
       const stopIdOff = hasStopMap ? 'sma.gtfs_value' : `CAST(r.${alightCol} AS VARCHAR)`;
+      const matchField = esc(config.stopGtfsField);
+
+      // direction_id が trips にあれば (route_id, direction_id) で方向別に正準 trip を選択。
+      // shape_id があればさらに変形パターンを区別する。
+      const hasDirection = await columnExists(db, 'trips', 'direction_id');
+      const hasShapeId = await columnExists(db, 'trips', 'shape_id');
+      const dirExpr = hasDirection
+        ? `COALESCE(CAST(t.direction_id AS VARCHAR), '_')`
+        : `'_'`;
+      const shapeExpr = hasShapeId
+        ? `COALESCE(CAST(t.shape_id AS VARCHAR), '_')`
+        : `'_'`;
+
+      const odHourlyCols = buildHourlySumCols(countExpr, hourExpr, 'ridership');
+      const hourlyCarryForward = HOUR_KEYS.map(k => `od.ridership_${k}`).join(', ');
+      const hourlyCarryExpand = HOUR_KEYS.map(k => `chosen.ridership_${k}`).join(', ');
+      const hourlyFinalSums = HOUR_KEYS
+        .map(k => `SUM(ridership_${k}) AS ridership_${k}`)
+        .join(',\n              ');
 
       await conn.query(`
         CREATE TABLE ridership_by_segment AS
-        SELECT ${stopIdOn} AS from_stop_val, ${stopIdOff} AS to_stop_val,
-               SUM(${countExpr}) AS riders
-        FROM ridership r ${stopJoinOn} ${stopJoinOff}
-        WHERE ${stopIdOn} IS NOT NULL AND ${stopIdOff} IS NOT NULL
-        GROUP BY ${stopIdOn}, ${stopIdOff}
+        WITH canonical_trip AS (
+          SELECT route_id, dir_key, trip_id FROM (
+            SELECT
+              CAST(t.route_id AS VARCHAR) AS route_id,
+              ${dirExpr} || '|' || ${shapeExpr} AS dir_key,
+              CAST(t.trip_id AS VARCHAR) AS trip_id,
+              ROW_NUMBER() OVER (
+                PARTITION BY CAST(t.route_id AS VARCHAR),
+                             ${dirExpr} || '|' || ${shapeExpr}
+                ORDER BY COUNT(*) DESC, CAST(t.trip_id AS VARCHAR)
+              ) AS rn
+            FROM trips t
+            JOIN stop_times st ON CAST(t.trip_id AS VARCHAR) = CAST(st.trip_id AS VARCHAR)
+            GROUP BY CAST(t.route_id AS VARCHAR),
+                     ${dirExpr} || '|' || ${shapeExpr},
+                     CAST(t.trip_id AS VARCHAR)
+          ) x WHERE rn = 1
+        ),
+        route_stops AS (
+          -- GTFS の stop_sequence は飛び番（例: 14 → 17）が許容されるため、
+          -- LEAD で順序上の次停留所を取得する。
+          SELECT
+            ct.route_id,
+            ct.dir_key,
+            CAST(st.stop_id AS VARCHAR) AS stop_id,
+            CAST(s.${matchField} AS VARCHAR) AS stop_val,
+            CAST(st.stop_sequence AS INTEGER) AS stop_sequence,
+            LEAD(CAST(s.${matchField} AS VARCHAR)) OVER (
+              PARTITION BY ct.route_id, ct.dir_key
+              ORDER BY CAST(st.stop_sequence AS INTEGER)
+            ) AS next_stop_val
+          FROM canonical_trip ct
+          JOIN stop_times st ON CAST(ct.trip_id AS VARCHAR) = CAST(st.trip_id AS VARCHAR)
+          JOIN stops s ON CAST(st.stop_id AS VARCHAR) = CAST(s.stop_id AS VARCHAR)
+        ),
+        ridership_od AS (
+          SELECT
+            ${stopIdOn} AS b_val,
+            ${stopIdOff} AS a_val,
+            SUM(${countExpr}) AS pax,
+            ${odHourlyCols.join(',\n            ')}
+          FROM ridership r ${stopJoinOn} ${stopJoinOff}
+          WHERE ${stopIdOn} IS NOT NULL AND ${stopIdOff} IS NOT NULL
+            AND ${stopIdOn} != ${stopIdOff}
+          GROUP BY ${stopIdOn}, ${stopIdOff}
+        ),
+        od_with_route AS (
+          SELECT
+            od.b_val, od.a_val, od.pax,
+            ${hourlyCarryForward},
+            rs1.route_id,
+            rs1.dir_key,
+            rs1.stop_sequence AS b_seq,
+            rs2.stop_sequence AS a_seq,
+            ROW_NUMBER() OVER (
+              PARTITION BY od.b_val, od.a_val
+              ORDER BY (rs2.stop_sequence - rs1.stop_sequence), rs1.route_id, rs1.dir_key
+            ) AS rn
+          FROM ridership_od od
+          JOIN route_stops rs1 ON rs1.stop_val = od.b_val
+          JOIN route_stops rs2
+            ON rs2.route_id = rs1.route_id
+           AND rs2.dir_key  = rs1.dir_key
+           AND rs2.stop_val = od.a_val
+          WHERE rs1.stop_sequence < rs2.stop_sequence
+        ),
+        chosen AS (SELECT * FROM od_with_route WHERE rn = 1),
+        expanded AS (
+          SELECT
+            rs.stop_val AS from_stop_val,
+            rs.next_stop_val AS to_stop_val,
+            chosen.pax,
+            ${hourlyCarryExpand}
+          FROM chosen
+          JOIN route_stops rs
+            ON rs.route_id = chosen.route_id
+           AND rs.dir_key  = chosen.dir_key
+           AND rs.stop_sequence >= chosen.b_seq
+           AND rs.stop_sequence <  chosen.a_seq
+          WHERE rs.next_stop_val IS NOT NULL
+        )
+        SELECT
+          from_stop_val,
+          to_stop_val,
+          SUM(pax) AS riders,
+          ${hourlyFinalSums}
+        FROM expanded
+        GROUP BY from_stop_val, to_stop_val
       `);
-    } else if (config.boardingStopCol && config.tripIdCol && config.stopSequenceCol) {
+    } else if (config.boardingStopCol && config.tripIdCol && config.timeCol) {
       const stopCol = esc(config.boardingStopCol);
       const tripCol = esc(config.tripIdCol);
-      const seqCol = esc(config.stopSequenceCol);
       const routeCol = config.routeCol ? esc(config.routeCol) : null;
 
       const stopJoin = hasStopMap
@@ -312,25 +447,33 @@ export async function executeRidershipJoin(
         ? `COALESCE(TRY_CAST(r.${esc(config.passThroughCol)} AS INTEGER), 0)`
         : `COALESCE(TRY_CAST(r.${esc(config.countOnCol!)} AS INTEGER), 0)`;
 
+      // 便内の停留所順序は時刻列で決定
+      const orderExpr = `CAST(r.${esc(config.timeCol)} AS VARCHAR)`;
+
+      const segmentHourlyCols = buildHourlySumCols('pass_through', '_hour', 'ridership');
+
       await conn.query(`
         CREATE TABLE ridership_by_segment AS
         WITH ordered AS (
           SELECT
             ${stopId} AS gtfs_stop_val,
             ${partitionKey} AS trip_key,
-            CAST(r.${seqCol} AS INTEGER) AS stop_seq,
-            ${passThroughExpr} AS pass_through
+            ${orderExpr} AS stop_order,
+            ${passThroughExpr} AS pass_through,
+            ${hourExpr} AS _hour
           FROM ridership r ${stopJoin}
           WHERE ${stopId} IS NOT NULL
         ),
         with_next AS (
           SELECT
             gtfs_stop_val AS from_stop_val,
-            LEAD(gtfs_stop_val) OVER (PARTITION BY trip_key ORDER BY stop_seq) AS to_stop_val,
-            pass_through
+            LEAD(gtfs_stop_val) OVER (PARTITION BY trip_key ORDER BY stop_order) AS to_stop_val,
+            pass_through,
+            _hour
           FROM ordered
         )
-        SELECT from_stop_val, to_stop_val, SUM(pass_through) AS riders
+        SELECT from_stop_val, to_stop_val, SUM(pass_through) AS riders,
+               ${segmentHourlyCols.join(',\n               ')}
         FROM with_next
         WHERE to_stop_val IS NOT NULL
         GROUP BY from_stop_val, to_stop_val
@@ -354,6 +497,8 @@ export async function executeRidershipJoin(
       const stopIdOn = hasStopMap ? 'smb2.gtfs_value' : `CAST(r.${boardCol} AS VARCHAR)`;
       const stopIdOff = hasStopMap ? 'sma2.gtfs_value' : `CAST(r.${alightCol} AS VARCHAR)`;
 
+      const flowHourlyCols = buildHourlySumCols(countExpr, hourExpr, 'ridership');
+
       await conn.query(`
         CREATE TABLE ridership_by_flow AS
         SELECT
@@ -365,7 +510,8 @@ export async function executeRidershipJoin(
           CAST(als.stop_name AS VARCHAR) AS alighting_stop_name,
           CAST(als.stop_lon AS DOUBLE) AS alighting_lon,
           CAST(als.stop_lat AS DOUBLE) AS alighting_lat,
-          SUM(${countExpr}) AS ridership
+          SUM(${countExpr}) AS ridership,
+          ${flowHourlyCols.join(',\n          ')}
         FROM ridership r
           ${stopJoinOn}
           ${stopJoinOff}
@@ -456,6 +602,7 @@ export interface RidershipArcRow {
   alighting_lon: number;
   alighting_lat: number;
   value: number;
+  hourly?: Record<string, number>;
 }
 
 export async function queryRidershipFlows(db: AsyncDuckDB): Promise<RidershipArcRow[]> {
@@ -464,6 +611,11 @@ export async function queryRidershipFlows(db: AsyncDuckDB): Promise<RidershipArc
     const res = await conn.query(`SELECT * FROM ridership_by_flow`);
     return res.toArray().map(r => {
       const o = coerceRow(r);
+      const hourly: Record<string, number> = {};
+      for (const k of HOUR_KEYS) {
+        const v = o[`ridership_${k}`];
+        if (v !== undefined && v !== null) hourly[`ridership_${k}`] = Number(v);
+      }
       return {
         boarding_stop_id: String(o.boarding_stop_id),
         boarding_stop_name: String(o.boarding_stop_name ?? ''),
@@ -474,6 +626,7 @@ export async function queryRidershipFlows(db: AsyncDuckDB): Promise<RidershipArc
         alighting_lon: Number(o.alighting_lon),
         alighting_lat: Number(o.alighting_lat),
         value: Number(o.ridership ?? 0),
+        hourly,
       };
     });
   } finally {

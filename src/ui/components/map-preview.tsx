@@ -143,11 +143,19 @@ function buildDeckLayers(
       }));
     } else if (key === 'lines' || key === 'trips' || key === 'segments') {
       const pathData = expandToPaths(fc.features);
+      const segmentCasingWidth = (d: PathDatum) => {
+        const v = Number(d.feature.properties?.trip_weekday ?? 0);
+        return Math.max(2, Math.sqrt(v) * 1.5 + 2);
+      };
+      const segmentWidth = (d: PathDatum) => {
+        const v = Number(d.feature.properties?.trip_weekday ?? 0);
+        return Math.max(1, Math.sqrt(v) * 1.2);
+      };
       layers.push(new PathLayer({
         id: `${key}-casing`,
         data: pathData,
         getPath: (d: PathDatum) => d.path as unknown as number[],
-        getWidth: key === 'lines' ? 5 : key === 'segments' ? 5 : 4,
+        getWidth: key === 'segments' ? segmentCasingWidth : key === 'lines' ? 5 : 4,
         widthMinPixels: key === 'lines' ? 5 : 4,
         getColor: (_d: PathDatum, { index }: { index: number }) =>
           pinnedInfo?.sourceLayerId === key && pinnedInfo.index === index ? HIGHLIGHT_COLOR : [255, 255, 255, key === 'trips' ? 150 : 230],
@@ -166,7 +174,7 @@ function buildDeckLayers(
         id: key,
         data: pathData,
         getPath: (d: PathDatum) => d.path as unknown as number[],
-        getWidth: key === 'lines' ? 2.5 : key === 'segments' ? 2 : 1.5,
+        getWidth: key === 'segments' ? segmentWidth : key === 'lines' ? 2.5 : 1.5,
         widthMinPixels: key === 'lines' ? 2 : 1,
         getColor: color,
         pickable: true,

@@ -137,8 +137,10 @@ const en = {
   'ridership.countOnCol': 'Boarding count column',
   'ridership.countOffCol': 'Alighting count column',
   'ridership.tripIdCol': 'Trip ID column',
-  'ridership.stopSequenceCol': 'Stop sequence column',
   'ridership.passThroughCol': 'Pass-through count column',
+  'ridership.timeCol': 'Time column (for hourly aggregation)',
+  'ridership.routeFilter': 'route filter (id / short / long name)',
+  'ridership.perTripToggle': 'Add ridership / trip columns',
   'ridership.notSet': '(not set)',
   'ridership.mappingCsvHint': 'CSV: 1st column = OD value, 2nd column = GTFS value',
 
@@ -282,8 +284,10 @@ const ja: Dict = {
   'ridership.countOnCol': '乗車数列',
   'ridership.countOffCol': '降車数列',
   'ridership.tripIdCol': '便ID列',
-  'ridership.stopSequenceCol': '停留所順列',
   'ridership.passThroughCol': '通過人数列',
+  'ridership.timeCol': '時刻列（時間帯別集計用）',
+  'ridership.routeFilter': '路線で絞り込み（id / 短名 / 長名）',
+  'ridership.perTripToggle': '便あたり乗車人数の列を追加',
   'ridership.notSet': '（未設定）',
   'ridership.mappingCsvHint': 'CSV: 1列目=OD側の値, 2列目=GTFS側の値',
 

@@ -27,9 +27,23 @@ function featuresToRows(fc: FeatureCollection): Record<string, unknown>[] {
   });
 }
 
+function unionKeys(rows: Record<string, unknown>[]): string[] {
+  const keys: string[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    for (const k of Object.keys(row)) {
+      if (!seen.has(k)) {
+        seen.add(k);
+        keys.push(k);
+      }
+    }
+  }
+  return keys;
+}
+
 function buildCsv(rows: Record<string, unknown>[]): string {
   if (rows.length === 0) return '';
-  const keys = Object.keys(rows[0]!);
+  const keys = unionKeys(rows);
   const escape = (v: unknown): string => {
     const s = v === null || v === undefined ? '' : String(v);
     if (s.includes(',') || s.includes('"') || s.includes('\n')) {
@@ -58,7 +72,7 @@ export function downloadCsv(data: FeatureCollection, filename: string): void {
 export async function downloadXlsx(data: FeatureCollection, filename: string): Promise<void> {
   const { utils, writeFile } = await import('xlsx');
   const rows = featuresToRows(data);
-  const ws = utils.json_to_sheet(rows);
+  const ws = utils.json_to_sheet(rows, { header: unionKeys(rows) });
   const wb = utils.book_new();
   utils.book_append_sheet(wb, ws, 'Sheet1');
   writeFile(wb, filename);
@@ -117,7 +131,7 @@ export async function downloadAll(
     const wb = utils.book_new();
     for (const [name, data] of entries) {
       const rows = featuresToRows(data);
-      const ws = utils.json_to_sheet(rows);
+      const ws = utils.json_to_sheet(rows, { header: unionKeys(rows) });
       utils.book_append_sheet(wb, ws, name);
     }
     writeFile(wb, 'gtfs-cooker-output.xlsx');
