@@ -69,8 +69,9 @@ export function defaultFieldConfig(format: RidershipFormat, headers: string[]): 
         boardingStopCol: find('boarding_station_name') ?? find('boarding_station_code'),
         alightingStopCol: find('alighting_station_name') ?? find('alighting_station_code'),
         stopGtfsField: 'stop_name',
-        routeCol: find('boarding_route_name') ?? find('boarding_route_id'),
-        routeGtfsField: 'route_long_name',
+        // COMmmmONS は boarding_route_id を GTFS route_id と直接対応させる仕様。
+        routeCol: find('boarding_route_id') ?? find('boarding_route_name'),
+        routeGtfsField: 'route_id',
         agencyCol: find('operating_agency_name') ?? find('operating_agency_code'),
         agencyGtfsField: 'agency_name',
         countCols: [

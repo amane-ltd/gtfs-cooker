@@ -78,7 +78,7 @@ For the COMmmmONS data specification, see MLIT's [Public Transport Data Standard
 | ✅ | Boarding stop | `boarding_station_name` / `boarding_station_code` |
 | ✅ | Alighting stop | `alighting_station_name` / `alighting_station_code` |
 | ✅ | Count columns | `adult_passenger_count` and other passenger-category columns |
-| Optional | Route | `boarding_route_name` / `boarding_route_id` |
+| Optional | Route | `boarding_route_id` (matched against GTFS `route_id`) |
 | Optional | Agency | `operating_agency_name` / `operating_agency_code` |
 | Optional | Time | `payment_at` (timestamp) |
 

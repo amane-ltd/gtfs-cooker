@@ -78,7 +78,7 @@ COMmmmONS のデータ仕様は国土交通省 [公共交通データ標準仕�
 | ✅ | 乗車停留所列 | `boarding_station_name` / `boarding_station_code` |
 | ✅ | 降車停留所列 | `alighting_station_name` / `alighting_station_code` |
 | ✅ | 乗降数列（複数） | `adult_passenger_count` ほか年齢区分カラム |
-| 任意 | 路線列 | `boarding_route_name` / `boarding_route_id` |
+| 任意 | 路線列 | `boarding_route_id`（GTFS 側は `route_id` で照合） |
 | 任意 | 事業者列 | `operating_agency_name` / `operating_agency_code` |
 | 任意 | 時刻列 | `payment_at`（タイムスタンプ） |
 
@@ -229,7 +229,7 @@ OD ペアごとに件数を集計した形式です。1 行 = 1 OD ペア。
 <p align="center"><img src="../images/matching-stops.png" width="50%"></p>
 
 - **ジオメトリ**: Point（GTFS Stops と同じ位置）
-- **円のサイズ**: `√(ridership_on + ridership_off) × 20` で計算され、利用者数が多い停留所ほど大きく表示されます。
+- **円のサイズ**: `ridership_on`もしくは`ridership_off` に応じて、利用者数が多い停留所ほど大きく表示されます。
 - **主要プロパティ**:
   - GTFS Stops レイヤーの全プロパティ（`stop_id` / `stop_name` / `routes` / `trip_weekday` / `trip_morning` 〜 `trip_27` ほか）
   - `ridership_on`（総乗車数）, `ridership_off`（総降車数）
@@ -244,7 +244,7 @@ OD ペアごとに件数を集計した形式です。1 行 = 1 OD ペア。
 <p align="center"><img src="../images/matching-lines.png" width="50%"></p>
 
 - **ジオメトリ**: MultiLineString（GTFS Lines と同じ路線形状）
-- **線の太さ**: `ridership_count` に応じて `√(ridership_count) × 1.5` で計算され、利用者数が多い路線ほど太く描画されます。
+- **線の太さ**: `ridership_count` に応じて、利用者数が多い路線ほど太く描画されます。
 - **主要プロパティ**: `route_id` / `route_short_name` / `route_long_name` / `ridership_count` ＋時間帯別 `ridership_*` ＋ `ridership_per_trip_*`
 - **用途**: 路線別の需要比較、混雑路線の特定、時間帯別の路線利用パターン分析。
 
@@ -255,7 +255,7 @@ OD ペアごとに件数を集計した形式です。1 行 = 1 OD ペア。
 <p align="center"><img src="../images/matching-segments.png" width="50%"></p>
 
 - **ジオメトリ**: LineString（停留所間の直線または GTFS Segments と同じ区間形状）
-- **線の太さ**: `ridership` に応じて `√(ridership) × 1.5` で計算され、通過人数が多い区間ほど太く描画されます。
+- **線の太さ**: `ridership` に応じて、通過人数が多い区間ほど太く描画されます。
 - **主要プロパティ**:
   - `from_stop_id` / `from_stop_name` / `from_stop_lat` / `from_stop_lon`
   - `to_stop_id` / `to_stop_name` / `to_stop_lat` / `to_stop_lon`
@@ -271,7 +271,7 @@ OD ペア（乗車地 → 降車地）を集約してアークで可視化しま
 <p align="center"><img src="../images/matching-flow.png" width="50%"></p>
 
 - **ジオメトリ**: LineString（アークの始点・終点）
-- **線の太さ**: `ridership` に応じて `√(ridership) × 2` で計算され、流動量が多い OD ペアほど太く描画されます。
+- **線の太さ**: `ridership` に応じて、流動量が多い OD ペアほど太く描画されます。
 - **主要プロパティ**:
   - `boarding_stop_id` / `boarding_stop_name` / `boarding_lat` / `boarding_lon`
   - `alighting_stop_id` / `alighting_stop_name` / `alighting_lat` / `alighting_lon`
@@ -286,7 +286,7 @@ OD レコードを集約せず、1 個票ごとに 1 本のアークを描画し
 <p align="center"><img src="../images/matching-od.png" width="50%"></p>
 
 - **ジオメトリ**: LineString
-- **線の太さ**: 固定幅（細い）
+- **線の太さ**: `passenger_count`（1~2程度なので、細い）
 - **主要プロパティ**:
   - `boarding_stop_id` / `boarding_stop_name` / `boarding_lat` / `boarding_lon`
   - `alighting_stop_id` / `alighting_stop_name` / `alighting_lat` / `alighting_lon`
