@@ -324,3 +324,46 @@ OD ペアごとに集約されたデータ形式です。
 | alighting_lat | number | 降車停留所の緯度 |
 | alighting_lon | number | 降車停留所の経度 |
 | passenger_count | number | 1 個票あたりの乗客数 |
+
+### Matching Trips レイヤー（LineString, 便×区間, 時刻アニメ対応）
+
+| プロパティ | 型 | 説明 |
+|-----------|-----|------|
+| trip_id | string | データ側の便ID（停留所×便別実績では生の便ID。OD 形式では割り当てられた GTFS trip_id） |
+| date | string | 乗降日（YYYY-MM-DD） |
+| route_id | string | データ側の路線/経路ID または GTFS route_id |
+| route_short_name | string \| null | GTFS routes.txt の短縮名（JOIN できれば） |
+| route_long_name | string \| null | GTFS routes.txt の長名（JOIN できれば） |
+| direction_id | number \| null | GTFS の方向 ID（OD 形式のみ） |
+| service_id | string \| null | GTFS の service_id（OD 形式のみ） |
+| from_stop_id | string | 出発停留所 ID |
+| from_stop_name | string | 出発停留所名 |
+| to_stop_id | string | 到着停留所 ID |
+| to_stop_name | string | 到着停留所名 |
+| departure_time | string | 出発時刻（GTFS HH:MM:SS、または停留所×便別実績の元時刻） |
+| arrival_time | string | 到着時刻 |
+| onboard | number | 区間通過時の乗車中人数 |
+| boardings_at_from | number | from_stop での乗車人数 |
+| alightings_at_to | number | to_stop での降車人数 |
+
+ジオメトリ座標は `[lon, lat, 0, unix_seconds]` の 4 要素（Kepler.gl Trip 形式）。タイムバーで時刻ベースのアニメーション再生に対応。
+
+### Matching Ridership レイヤー（LineString, 個票単位の軌跡）
+
+| プロパティ | 型 | 説明 |
+|-----------|-----|------|
+| ridership_record_id | number | データ内の通し ID |
+| trip_id | string | 割り当てられた GTFS trip_id |
+| date | string | 乗降日（YYYY-MM-DD） |
+| route_id | string | GTFS route_id |
+| route_short_name | string \| null | GTFS routes.txt の短縮名 |
+| boarding_stop_id | string | 乗車停留所 ID |
+| boarding_stop_name | string | 乗車停留所名 |
+| boarding_time | string | 乗車時刻（HH:MM） |
+| alighting_stop_id | string | 降車停留所 ID |
+| alighting_stop_name | string | 降車停留所名 |
+| alighting_time | string | 降車時刻（HH:MM） |
+| passenger_count | number | 乗客数（個票単位） |
+| duration_min | number | 乗車時間（分） |
+
+ジオメトリ座標は `[lon, lat, 0, unix_seconds]` の 4 要素（Kepler.gl Trip 形式）。各座標は trip 内の停留所を順に並べたもので、4 要素目は GTFS の departure_time から算出した日付込み unix 秒。

@@ -59,7 +59,8 @@ Review the detected format and, if necessary, adjust column mappings in the "Col
 | Count columns (multi) | Per-row sum of selected columns becomes the row's ridership | all ridership values |
 | Trip ID column | Trip ID for per-trip pass-through accounting | matching-segments (trip-detail path) |
 | Pass-through count | Pass-through passenger count at the stop | matching-segments (trip-detail path) |
-| Time column | Time column for hourly aggregation. **Required for Stop × Trip Detail**, where it doubles as the in-trip ordering key. Auto-detected at load time from common column names (`payment_at`, `datetime`, `時刻`, `発車時刻`, ...). | all layers' `ridership_*` and period columns |
+| Date column | Optional. Use when date and time are in separate columns. Auto-detected names: `boarding_date`, `service_date`, `運行日`, `日付`, etc. Supported formats: `YYYY-MM-DD`, `YYYY/MM/DD`, `YYYYMMDD`, `MM/DD/YYYY`, etc. | matching-trips / matching-ridership |
+| Time column | Time-of-day or full datetime, used for hourly aggregation and trip assignment. **Required for Stop × Trip Detail**. Auto-detected: `boarding_at`, `payment_at`, `datetime`, `時刻`, `発車時刻`, etc.<br>**Without date column**: expects full datetime like `2026-05-21 07:47:17`.<br>**With date column**: expects time-of-day only (`07:47:17` / `07:47` / `7`). | all layers' `ridership_*` and period columns |
 
 When the time column is set, the hour is extracted from formats such as `HH:MM:SS`, `YYYY-MM-DD HH:MM:SS`, ISO 8601, or a plain integer hour, exposing `ridership_morning`–`ridership_latenight` and `ridership_04`–`ridership_27` columns. The buckets mirror the GTFS `trip_XX` definitions (morning 4–8 / daytime 9–16 / evening 17–20 / latenight 21–27).
 
@@ -158,9 +159,11 @@ Available sub-layers depend on the column configuration:
 |-----------|-----------------|
 | Matching Stops | Boarding stop |
 | Matching Lines | Route |
-| Matching Segments | Boarding stop + Alighting stop |
+| Matching Segments | Boarding stop + Alighting stop (or Stop × Trip Detail) |
 | Matching Flow | Boarding stop + Alighting stop |
 | Matching OD | Boarding stop + Alighting stop |
+| Matching Trips | Boarding stop + Alighting stop + time column (or Stop × Trip Detail) |
+| Matching Ridership | Boarding stop + Alighting stop + time column (OD detail only) |
 
 ### Step 5: Reconciliation
 
@@ -293,8 +296,72 @@ Renders one arc per OD record (not aggregated).
   - `passenger_count` (per record)
 - **Use cases**: record-level analysis, downstream BI tooling, validating OD patterns at the individual level.
 
+#### Matching Trips (LineString, per-trip × segment)
+
+Assigns each OD record to a specific GTFS trip (by time-nearest matching) and visualizes the **onboard count per (trip, segment)**. For the Stop × Trip Detail format, the `pass_through` column is used directly as `onboard` (no inference needed).
+
+- **Geometry**: LineString (1 feature = 1 segment of 1 trip; straight line between adjacent stops)
+- **Line width**: `√(onboard) × 1.5`
+- **Key properties**:
+  - `trip_id`, `route_id`, `route_short_name`, `route_long_name`, `direction_id`, `service_id`
+  - `from_stop_id` / `from_stop_name`
+  - `to_stop_id` / `to_stop_name`
+  - `departure_time`, `arrival_time` (from GTFS; from the data's time column for Stop × Trip Detail)
+  - `onboard` (passengers on board through this segment)
+  - `boardings_at_from` / `alightings_at_to`
+- **Supported formats**: OD Detail (COMmmmONS) / OD Detail (generic, with time column) / Stop × Trip Detail
+- **Use cases**: per-trip congestion analysis, peak-segment identification, schedule revision planning
+- **Trip uniqueness**: trips are identified internally by a composite key of `(date, route column, trip-id column)`. When the data has both a `route_id`-style column and a finer-grained `pattern_id` column, set the **pattern column** as the route column to avoid merging different patterns that reuse the same trip ID.
+- **Service-calendar integration**: for each ridership date, GTFS `calendar.txt` + `calendar_dates.txt` are consulted, and only trips with an active service_id on that date are eligible (same logic as the trips layer's base-date filter).
+
+#### Matching Ridership (LineString, per-record trajectory)
+
+For each OD record, generates a trajectory along the assigned trip's stops. Output is in **Kepler.gl Trip format** (coordinates with timestamps), enabling time-based animation.
+
+- **Geometry**: LineString (1 feature = 1 record; from boarding to alighting through intermediate stops)
+- **Coordinate format**: `[lon, lat, 0, unix_seconds]` (Kepler.gl Trip 4-tuple)
+- **Key properties**:
+  - `ridership_record_id`, `trip_id`, `route_id`, `route_short_name`
+  - `boarding_stop_id` / `boarding_stop_name` / `boarding_time`
+  - `alighting_stop_id` / `alighting_stop_name` / `alighting_time`
+  - `passenger_count`, `duration_min`
+- **Supported formats**: OD Detail (COMmmmONS) / OD Detail (generic, with time column) ONLY. OD-aggregate and Stop × Trip Detail are not supported (OD link is lost in aggregation)
+- **Use cases**: time-of-day passenger distribution, Kepler.gl time-series animations, peak-hour flow analysis
+
 ::: tip
 Download as GeoJSON / CSV / Excel (.xlsx). CSV and XLSX include `_longitude` / `_latitude` columns in place of the geometry for point layers (e.g. matching-stops).
+
+When matching-ridership is imported into Kepler.gl, the 4th element of each coordinate (unix seconds) is recognized as the time axis, enabling passenger-flow animation per trip.
+:::
+
+### Step 8: Time animation & consistency checks
+
+#### Time scrubber (trips / matching-trips / matching-ridership)
+
+When you select a layer with embedded timestamps (`trips`, `matching-trips`, or `matching-ridership`), a kepler.gl-style time bar appears at the bottom of the map.
+
+- **Play / Pause / Reset**: standard playback controls
+- **Scrubber**: drag to jump to any time
+- **Trail**: how long the trail persists (30s / 1m / 5m / 10m / 30m / 1h / All)
+- **Fade**: fade the trail over time
+- **Speed**: playback multiplier (60x / 300x / **600x (default)** / 1800x / 3600x)
+
+Time is shown in `YYYY-MM-DD HH:MM:SS` so multi-day datasets are clearly distinguishable.
+
+#### Trip-assignment / Feed validity panel
+
+After generating matching-trips / matching-ridership, the **Trip-assignment / GTFS validity** panel appears below the join stats.
+
+| Indicator | State | Meaning |
+|-----------|-------|---------|
+| ✓ (green) | input rows = assigned | All ridership data aligns with GTFS service calendar |
+| ⚠ (yellow) | dropped > 0 | Some ridership rows have no matching GTFS service (out of feed range / suspended service) |
+| (info) | feed_info.txt absent | Date validity check skipped |
+
+The **Dropped (no service)** row shows ridership records that could not be assigned because `calendar.txt` / `calendar_dates.txt` lookups produced no active service for the date. The **Out-of-feed-range** row lists the specific dates that fall outside `feed_info.feed_start_date` / `feed_end_date` (with the date list shown inline when ≤ 5).
+
+::: warning Silent data loss
+Ridership records on dates outside the GTFS feed period are **silently excluded** from matching-trips / matching-ridership (no features generated). If the assigned-row count is below the input-row count, check the "Dropped" row in this panel.
 :::
 
 ## Supported Formats

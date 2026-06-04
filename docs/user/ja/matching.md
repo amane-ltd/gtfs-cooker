@@ -59,7 +59,8 @@ CSV / Excel / TSV ファイルをドラッグ&ドロップ、またはファイ�
 | 乗降数列（複数） | 加算合計で 1 件あたりの乗車人数とみなす | 全 ridership 値 |
 | 便ID列 | 便（trip）ID。trip 単位の通過人数計算に必要 | matching-segments（trip-detail 経路） |
 | 通過人数列 | 当該停留所での通過人数 | matching-segments（trip-detail 経路） |
-| 時刻列 | 時間帯別集計のための時刻列。**停留所×便別実績では便内順序キーとしても使用するため必須**。データ読み込み時に `payment_at` / `datetime` / `時刻` / `発車時刻` などの一般的な列名を自動検知してデフォルト設定されます。 | 全レイヤーの `ridership_XX` / 時間帯列 |
+| 日付列 | 任意。日付と時刻が別カラムに分かれている場合に設定。`boarding_date` / `運行日` / `日付` などを自動検知。対応フォーマット: `YYYY-MM-DD` / `YYYY/MM/DD` / `YYYYMMDD` / `MM/DD/YYYY` 等 | matching-trips / matching-ridership |
+| 時刻列 | 時間帯別集計および便割り当て用。**停留所×便別実績では必須**。`boarding_at` / `payment_at` / `datetime` / `時刻` などを自動検知。<br>**日付列が未設定**の場合: `2026-05-21 07:47:17` のような datetime 形式が前提。<br>**日付列が設定済**の場合: 時刻のみ（`07:47:17` / `07:47` / `7` 等）を想定。 | 全レイヤーの `ridership_XX` / 時間帯列 |
 
 時刻列を設定すると `HH:MM:SS` / `YYYY-MM-DD HH:MM:SS` / ISO 8601 / 単純な整数（時）などのフォーマットから時刻が抽出され、`ridership_morning`〜`ridership_latenight` と `ridership_04`〜`ridership_27` の列が出力プロパティに追加されます。GTFS の `trip_XX` と同じ時間帯区分（朝 4-8 / 日中 9-16 / 夕 17-20 / 夜 21-27）です。
 
@@ -158,9 +159,11 @@ OD ペアごとに件数を集計した形式です。1 行 = 1 OD ペア。
 |-------------|-------------|
 | Matching Stops | 乗車停留所 |
 | Matching Lines | 路線 |
-| Matching Segments | 乗車停留所 + 降車停留所 |
+| Matching Segments | 乗車停留所 + 降車停留所（または停留所×便別実績） |
 | Matching Flow | 乗車停留所 + 降車停留所 |
 | Matching OD | 乗車停留所 + 降車停留所 |
+| Matching Trips | 乗車停留所 + 降車停留所 + 時刻列、または停留所×便別実績 |
+| Matching Ridership | 乗車停留所 + 降車停留所 + 時刻列（OD 個票のみ） |
 
 ### Step 5: 名寄せ（Reconciliation）
 
@@ -293,8 +296,72 @@ OD レコードを集約せず、1 個票ごとに 1 本のアークを描画し
   - `passenger_count`（1 個票あたりの乗客数）
 - **用途**: 個票レベルでの分析、外部 BI ツールでの集計、OD パターンの個別検証。
 
+#### Matching Trips（LineString, 便×区間）
+
+OD 個票を GTFS の特定 trip に時刻ベースで割り当て、**便ごと・区間ごとの乗車中人数 (`onboard`)** を可視化します。停留所×便別実績フォーマットでは `通過人数` 列がそのまま `onboard` として使われます（推定不要）。
+
+- **ジオメトリ**: LineString（1 feature = 1 trip の 1 区間。隣接停留所間の直線）
+- **線の太さ**: `onboard` に応じて `√(onboard) × 1.5`
+- **主要プロパティ**:
+  - `trip_id`, `route_id`, `route_short_name`, `route_long_name`, `direction_id`, `service_id`
+  - `from_stop_id` / `from_stop_name`
+  - `to_stop_id` / `to_stop_name`
+  - `departure_time`, `arrival_time`（GTFS 由来。停留所×便別実績ではデータ側の時刻）
+  - `onboard`（区間通過時の乗車中人数）
+  - `boardings_at_from` / `alightings_at_to`（各端での乗降人数）
+- **対応フォーマット**: OD実績(COMmmmONS) / 乗降実績(一件明細, 時刻列あり) / 停留所×便別実績
+- **用途**: 特定便の混雑推移、便別ピーク区間の特定、ダイヤ改正・増発検討
+- **trip 一意化**: 内部的に `(日付, 路線列, 便ID列)` の複合キーで便を識別。データに `路線ID` と `経路ID` の二段階がある場合は、**経路パターンを一意に識別する列（経路ID）**を `路線列` に設定するのが推奨。同じ路線 ID 下で異なる経路に同じ便 ID が含まれる場合に merge を防ぐため。
+- **サービスカレンダー連携**: 各乗降日に対して GTFS の `calendar.txt` + `calendar_dates.txt` を参照し、当日アクティブな service_id の便のみを割り当て候補とします（trips レイヤーの基準日フィルタと同じロジック）。
+
+#### Matching Ridership（LineString, 個票単位の軌跡）
+
+OD 個票 1 件ごとに、割り当てられた便の停留所列に沿って軌跡を生成。**Kepler.gl Trip 形式**（座標 + タイムスタンプ）で出力され、時刻ベースのアニメーションに対応可能。
+
+- **ジオメトリ**: LineString（1 feature = 1 個票。乗車地から降車地までの停留所列を結ぶ）
+- **座標形式**: `[lon, lat, 0, unix_seconds]` の 4 要素（Kepler.gl Trip 形式）
+- **主要プロパティ**:
+  - `ridership_record_id`, `trip_id`, `route_id`, `route_short_name`
+  - `boarding_stop_id` / `boarding_stop_name` / `boarding_time`
+  - `alighting_stop_id` / `alighting_stop_name` / `alighting_time`
+  - `passenger_count`, `duration_min`
+- **対応フォーマット**: OD実績(COMmmmONS) / 乗降実績(一件明細, 時刻列あり)のみ。OD 集計や停留所×便別実績は OD リンクが失われているため非対応
+- **用途**: 時刻別の乗客分布の可視化、Kepler.gl 等での時系列アニメ、ピーク時間帯の動線分析
+
 ::: tip
 ダウンロード形式は GeoJSON / CSV / Excel（.xlsx）から選択できます。CSV/XLSX ではジオメトリ列の代わりに `_longitude` / `_latitude`（matching-stops 等）が追加されます。
+
+matching-ridership を Kepler.gl にインポートすると、座標の 4 要素目（unix 秒）がそのまま時間軸として認識され、便ごとの乗客移動アニメーションが再生できます。
+:::
+
+### Step 8: タイムアニメーションと整合性チェック
+
+#### タイムシークバー（trips / matching-trips / matching-ridership で表示）
+
+時刻情報を持つレイヤー（`trips`, `matching-trips`, `matching-ridership`）を選択すると、地図下部に kepler.gl 風のタイムバーが現れます。
+
+- **再生 / 一時停止 / リセット**: 標準的な再生コントロール
+- **シークバー**: ドラッグで任意時刻にジャンプ
+- **Trail**: 軌跡の表示長（30秒 / 1分 / 5分 / 10分 / 30分 / 1時間 / All）
+- **Fade**: 軌跡を時間で薄くする
+- **Speed**: 再生速度倍率（60x / 300x / **600x（既定）** / 1800x / 3600x）
+
+時刻表示は `YYYY-MM-DD HH:MM:SS` 形式で、複数日にまたがるデータも識別可能です。
+
+#### 便割り当て / GTFS 有効期限パネル
+
+matching-trips / matching-ridership を生成すると、結合実行統計の下に **「便割り当て / GTFS 有効期限」** パネルが表示されます。
+
+| 表示 | 状態 | 意味 |
+|------|------|------|
+| ✓ (緑枠) | 入力行 = 割り当て済み | すべての乗降データが GTFS のサービスカレンダーと整合 |
+| ⚠ (黄枠) | dropped > 0 | 一部の乗降データに該当する便が GTFS に無い（feed 期間外 / 休止サービス等） |
+| (info) | feed_info.txt 無し | 期間検証スキップ |
+
+**「除外 (サービス無し)」** の行数は、`calendar.txt` / `calendar_dates.txt` の判定で当日アクティブな service_id が無いため割り当てができなかった乗降データを示します。**期間外の日数** は具体的にどの日付が feed 範囲外かを表示（5 日以下なら日付リスト併記）。
+
+::: warning データロスに注意
+GTFS feed 期間外の日付の乗降データは、matching-trips / matching-ridership の集計対象から**サイレントに除外**されます（feature が生成されない）。集計の総数が入力件数を下回る場合は、このパネルの「除外」行を確認してください。
 :::
 
 

@@ -324,3 +324,46 @@ Available properties for each layer. The actual exported properties can be selec
 | alighting_lat | number | Alighting stop latitude |
 | alighting_lon | number | Alighting stop longitude |
 | passenger_count | number | Passenger count per record |
+
+### Matching Trips Layer (LineString, per-trip × segment, time-animated)
+
+| Property | Type | Description |
+|----------|------|-------------|
+| trip_id | string | Trip ID from the data (raw 便ID for Stop × Trip Detail; GTFS trip_id for OD formats) |
+| date | string | Ridership date (YYYY-MM-DD) |
+| route_id | string | Route ID from the data, or GTFS route_id |
+| route_short_name | string \| null | From GTFS routes.txt (if JOIN succeeds) |
+| route_long_name | string \| null | From GTFS routes.txt (if JOIN succeeds) |
+| direction_id | number \| null | GTFS direction_id (OD formats only) |
+| service_id | string \| null | GTFS service_id (OD formats only) |
+| from_stop_id | string | Origin stop ID |
+| from_stop_name | string | Origin stop name |
+| to_stop_id | string | Destination stop ID |
+| to_stop_name | string | Destination stop name |
+| departure_time | string | Departure time (GTFS HH:MM:SS, or the data's time column for Stop × Trip Detail) |
+| arrival_time | string | Arrival time |
+| onboard | number | Passengers on board across this segment |
+| boardings_at_from | number | Boardings at from_stop |
+| alightings_at_to | number | Alightings at to_stop |
+
+Geometry coordinates use the 4-tuple `[lon, lat, 0, unix_seconds]` (Kepler.gl Trip format), enabling time-based animation via the time bar.
+
+### Matching Ridership Layer (LineString, per-record trajectory)
+
+| Property | Type | Description |
+|----------|------|-------------|
+| ridership_record_id | number | Sequential ID within the dataset |
+| trip_id | string | Assigned GTFS trip_id |
+| date | string | Ridership date (YYYY-MM-DD) |
+| route_id | string | GTFS route_id |
+| route_short_name | string \| null | From GTFS routes.txt |
+| boarding_stop_id | string | Boarding stop ID |
+| boarding_stop_name | string | Boarding stop name |
+| boarding_time | string | Boarding time (HH:MM) |
+| alighting_stop_id | string | Alighting stop ID |
+| alighting_stop_name | string | Alighting stop name |
+| alighting_time | string | Alighting time (HH:MM) |
+| passenger_count | number | Passenger count per record |
+| duration_min | number | Ride duration (minutes) |
+
+Geometry coordinates use the 4-tuple `[lon, lat, 0, unix_seconds]` (Kepler.gl Trip format). Each coordinate is a stop along the assigned trip; the 4th element is the full unix timestamp derived from the date and GTFS departure_time.
