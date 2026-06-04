@@ -14,6 +14,7 @@ import { buildEnvelope, buildConvexHull, buildConcaveHull } from '../geojson/are
 import { buildSegmentsGeoJSON } from '../geojson/segments';
 import { makeFeatureCollection } from '../geojson/helpers';
 import { detectAndDecode } from '../gtfs/encoding';
+import { parseGtfsTime } from '../lib/time';
 import { validateFiles, validateColumns } from '../gtfs/validator';
 import { t, tf, getLanguage, setLanguage as setI18nLanguage } from '../i18n';
 import type { Language } from '../i18n';
@@ -25,11 +26,39 @@ import { detectRidershipFormat } from '../ridership/detect-format';
 import { autoMatch } from '../ridership/auto-match';
 import { loadRidershipCsv, loadMappingRows, loadMappingCsv, dropRidershipTables } from '../db/ridership-loader';
 import { defaultFieldConfig } from '../ridership/detect-format';
-import { queryDistinctOdValues, queryGtfsStopGroups, queryGtfsRoutesForMatch, queryGtfsAgenciesForMatch, executeRidershipJoin, queryRidershipFlows, queryRidershipArcs, HOUR_KEYS } from '../db/ridership-queries';
-import type { RidershipArcRow } from '../db/ridership-queries';
+import { queryDistinctOdValues, queryGtfsStopGroups, queryGtfsRoutesForMatch, queryGtfsAgenciesForMatch, executeRidershipJoin, queryRidershipFlows, queryRidershipArcs, HOUR_KEYS, buildMatchingTripsTable, buildMatchingRidershipTable, queryMatchingTripSegments, queryMatchingRidership, queryTripAssignmentStats } from '../db/ridership-queries';
+import type { RidershipArcRow, MatchingTripSegmentRow, MatchingRidershipRow, TripAssignmentStats } from '../db/ridership-queries';
 
 export type Phase = 'idle' | 'loading' | 'loaded' | 'generating' | 'done';
 export type ExportFormat = 'geojson' | 'csv' | 'xlsx';
+
+/** アニメーション対象レイヤー。座標 4 要素目に unix 秒が入っているもの。 */
+const ANIMATABLE_LAYERS: ReadonlySet<string> = new Set([
+  'trips', 'matching-trips', 'matching-ridership',
+]);
+
+/** 生成済みレイヤーから unix 秒のレンジ (min, max) を抽出。 */
+function computeTimeBounds(
+  layers: Record<string, FeatureCollection>,
+): { min: number; max: number } | null {
+  let min = Infinity, max = -Infinity;
+  for (const [key, fc] of Object.entries(layers)) {
+    if (!ANIMATABLE_LAYERS.has(key)) continue;
+    for (const f of fc.features) {
+      const g = f.geometry;
+      if (g.type !== 'LineString') continue;
+      for (const c of g.coordinates as number[][]) {
+        const t = c[3];
+        if (typeof t === 'number' && Number.isFinite(t)) {
+          if (t < min) min = t;
+          if (t > max) max = t;
+        }
+      }
+    }
+  }
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min === max) return null;
+  return { min, max };
+}
 
 const ALL_LAYERS: LayerType[] = [
   'stops', 'lines', 'trips',
@@ -40,6 +69,7 @@ const ALL_LAYERS: LayerType[] = [
   'matching',
   'matching-stops', 'matching-lines', 'matching-segments',
   'matching-flow', 'matching-od',
+  'matching-trips', 'matching-ridership',
 ];
 
 interface AppState {
@@ -69,12 +99,28 @@ interface AppState {
   agencyMapping: MappingRow[];
   gtfsCandidates: Record<MappingType, CandidateGroup[]>;
   joinStats: JoinStats | null;
+  /** matching-trips / matching-ridership 生成時の便割り当て統計と feed_info 整合性 */
+  tripAssignmentStats: TripAssignmentStats | null;
   matchingOutputLayer: MatchingOutputLayer;
   matchingRouteFilter: string;
   matchingShowRidershipPerTrip: boolean;
   excelSheets: string[] | null;
   excelFile: File | null;
   is3D: boolean;
+
+  // Time animation
+  /** Current time in unix seconds (for animation of trips / matching-trips / matching-ridership) */
+  currentTime: number;
+  /** Min/max unix seconds across active animatable layers */
+  timeBounds: { min: number; max: number } | null;
+  /** Playback speed multiplier (1 real second = N simulated seconds) */
+  playbackSpeed: number;
+  isPlaying: boolean;
+  /** TripsLayer trail length in seconds (kepler.gl "Trail Length") */
+  trailLength: number;
+  /** Whether to fade the trail (kepler.gl "Fade Trail") */
+  fadeTrail: boolean;
+
   routeInfoList: Array<{ route_id: string; route_short_name: string | null; route_long_name: string | null }>;
   routeStopsByRoute: Record<string, Array<{ stop_id: string; stop_name: string }>>;
   travelTimeTargets: Record<string, string>;
@@ -93,6 +139,12 @@ interface AppState {
   setMatchingOutputLayer: (layer: MatchingOutputLayer) => void;
   setMatchingRouteFilter: (filter: string) => void;
   setMatchingShowRidershipPerTrip: (v: boolean) => void;
+
+  setCurrentTime: (t: number) => void;
+  setPlaybackSpeed: (s: number) => void;
+  setIsPlaying: (v: boolean) => void;
+  setTrailLength: (s: number) => void;
+  setFadeTrail: (v: boolean) => void;
   setSelectedProperties: (layer: LayerType, props: string[]) => void;
   setExportFormat: (f: ExportFormat) => void;
   loadGtfsFile: (file: File) => Promise<void>;
@@ -147,12 +199,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   agencyMapping: [],
   gtfsCandidates: { stop: [], route: [], agency: [] },
   joinStats: null,
+  tripAssignmentStats: null,
   matchingOutputLayer: 'matching-stops' as MatchingOutputLayer,
   matchingRouteFilter: '',
   matchingShowRidershipPerTrip: false,
   excelSheets: null,
   excelFile: null,
   is3D: false,
+  currentTime: 0,
+  timeBounds: null,
+  playbackSpeed: 600,
+  isPlaying: false,
+  trailLength: 600, // 10 minutes — kepler.gl-style default
+  fadeTrail: true,
   routeInfoList: [],
   routeStopsByRoute: {},
   travelTimeTargets: {},
@@ -161,6 +220,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   setMatchingOutputLayer: (layer) => set({ matchingOutputLayer: layer }),
   setMatchingRouteFilter: (filter) => set({ matchingRouteFilter: filter }),
   setMatchingShowRidershipPerTrip: (v) => set({ matchingShowRidershipPerTrip: v }),
+
+  setCurrentTime: (t) => set({ currentTime: t }),
+  setPlaybackSpeed: (s) => set({ playbackSpeed: s }),
+  setIsPlaying: (v) => set({ isPlaying: v }),
+  setTrailLength: (s) => set({ trailLength: s }),
+  setFadeTrail: (v) => set({ fadeTrail: v }),
 
   setLanguage: (lang) => {
     setI18nLanguage(lang);
@@ -731,6 +796,96 @@ export const useAppStore = create<AppState>((set, get) => ({
         return makeFeatureCollection(features);
       }
 
+      function buildMatchingTripsFeatures(rows: MatchingTripSegmentRow[]): FeatureCollection {
+        // SQL 側で OD レコードの日付込み unix を計算済み。停留所×便別実績では NULL なので
+        // tripsBaseDate でフォールバック。
+        const baseDate = state.tripsBaseDate || new Date().toISOString().slice(0, 10);
+        const features: Feature[] = rows.map(r => {
+          let departTs = r.departure_unix ?? null;
+          let arriveTs = r.arrival_unix ?? null;
+          if ((departTs == null || arriveTs == null) && r.departure_time && r.arrival_time) {
+            departTs = parseGtfsTime(r.departure_time, baseDate);
+            arriveTs = parseGtfsTime(r.arrival_time, baseDate);
+          }
+          const coords: number[][] = (departTs != null && arriveTs != null)
+            ? [
+                [r.from_stop_lon, r.from_stop_lat, 0, departTs],
+                [r.to_stop_lon, r.to_stop_lat, 0, arriveTs],
+              ]
+            : [
+                [r.from_stop_lon, r.from_stop_lat],
+                [r.to_stop_lon, r.to_stop_lat],
+              ];
+          return {
+            type: 'Feature' as const,
+            geometry: { type: 'LineString' as const, coordinates: coords },
+            properties: {
+              trip_id: r.trip_id,
+              date: r.date_str,
+              route_id: r.route_id,
+              route_short_name: r.route_short_name,
+              route_long_name: r.route_long_name,
+              service_id: r.service_id,
+              direction_id: r.direction_id < 0 ? null : r.direction_id,
+              from_stop_id: r.from_stop_id,
+              from_stop_name: r.from_stop_name,
+              to_stop_id: r.to_stop_id,
+              to_stop_name: r.to_stop_name,
+              departure_time: r.departure_time,
+              arrival_time: r.arrival_time,
+              onboard: r.onboard,
+              boardings_at_from: r.boardings_at_from,
+              alightings_at_to: r.alightings_at_to,
+            },
+          };
+        });
+        return makeFeatureCollection(features);
+      }
+
+      function buildMatchingRidershipFeatures(rows: MatchingRidershipRow[]): FeatureCollection {
+        // SQL 側で日付込み unix 秒を計算済み。Kepler.gl Trip 形式に詰める。
+        const features: Feature[] = rows.map(r => {
+          const coords4: number[][] = r.coordinates.map((c, i) => {
+            const ts = r.unix_times[i] ?? r.boarding_unix;
+            return [c[0], c[1], 0, ts];
+          });
+          const durationMin = Math.max(
+            0,
+            Math.round((r.alighting_unix - r.boarding_unix) / 60),
+          );
+          return {
+            type: 'Feature' as const,
+            geometry: {
+              type: 'LineString' as const,
+              coordinates: coords4,
+            },
+            properties: {
+              ridership_record_id: r.row_id,
+              trip_id: r.trip_id,
+              date: r.date_str,
+              route_id: r.route_id,
+              route_short_name: r.route_short_name,
+              boarding_stop_id: r.boarding_stop_id,
+              boarding_stop_name: r.boarding_stop_name,
+              boarding_time: unixToHHMM(r.boarding_unix),
+              alighting_stop_id: r.alighting_stop_id,
+              alighting_stop_name: r.alighting_stop_name,
+              alighting_time: unixToHHMM(r.alighting_unix),
+              passenger_count: r.passenger_count,
+              duration_min: durationMin,
+            },
+          };
+        });
+        return makeFeatureCollection(features);
+      }
+
+      function unixToHHMM(unix: number): string {
+        const tod = Math.floor(unix) % 86400;
+        const h = Math.floor(tod / 3600);
+        const m = Math.floor((tod % 3600) / 60);
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      }
+
       if (layer === 'matching-flow' && await tableExists(db, 'ridership_by_flow')) {
         const rows = await queryRidershipFlows(db);
         results['matching-flow'] = buildArcFeatures(rows, 'ridership');
@@ -743,7 +898,63 @@ export const useAppStore = create<AppState>((set, get) => ({
         addLog('info', tf('log.features', 'matching-od', results['matching-od'].features.length));
       }
 
-      set({ generatedLayers: results, phase: 'done', progress: null });
+      const fallbackDate = state.tripsBaseDate || new Date().toISOString().slice(0, 10);
+
+      /** matching-trips / matching-ridership 共通: 便割り当て統計を計算し、UI / ログに反映 */
+      async function recordTripAssignmentStats() {
+        const stats = await queryTripAssignmentStats(db);
+        set({ tripAssignmentStats: stats });
+        if (stats.feedStartDate && stats.feedEndDate && stats.outOfFeedRange > 0) {
+          addLog('warn', `${stats.outOfFeedRange} 日分の乗降データが GTFS feed_info 期間 (${stats.feedStartDate} 〜 ${stats.feedEndDate}) の外です。便割り当てが不正確になる可能性があります。`);
+        }
+        if (stats.uniqueDates.length > 0) {
+          addLog('info', `便割り当て: ${stats.assigned} 行に対し ${stats.uniqueDates.length} 日のサービスカレンダーを参照 (${stats.uniqueDates[0]} 〜 ${stats.uniqueDates[stats.uniqueDates.length - 1]})`);
+        }
+      }
+
+      // Phase 2: matching-trips（便 × 区間の onboard 可視化）
+      if (layer === 'matching-trips' && rFieldConfig) {
+        await buildMatchingTripsTable(db, rFieldConfig, state.reconciliationMode, fallbackDate);
+        await recordTripAssignmentStats();
+        const rows = await queryMatchingTripSegments(db);
+        results['matching-trips'] = buildMatchingTripsFeatures(rows);
+        // route filter
+        if (state.matchingRouteFilter.trim()) {
+          applyRouteFilter(results['matching-trips'], 'route_id', 'route_short_name', 'route_long_name');
+        }
+        addLog('info', tf('log.features', 'matching-trips', results['matching-trips'].features.length));
+      }
+
+      // Phase 3: matching-ridership（個票単位の軌跡）
+      if (layer === 'matching-ridership' && rFieldConfig) {
+        // 前段で trip assignment が必要なので buildMatchingTripsTable を先に走らせる
+        await buildMatchingTripsTable(db, rFieldConfig, state.reconciliationMode, fallbackDate);
+        await recordTripAssignmentStats();
+        await buildMatchingRidershipTable(db, rFieldConfig, fallbackDate);
+        const rows = await queryMatchingRidership(db);
+        results['matching-ridership'] = buildMatchingRidershipFeatures(rows);
+        if (state.matchingRouteFilter.trim()) {
+          applyRouteFilter(results['matching-ridership'], 'route_id', 'route_short_name');
+        }
+        addLog('info', tf('log.features', 'matching-ridership', results['matching-ridership'].features.length));
+      }
+
+      // 時刻アニメ用バウンズの算出
+      const timeBounds = computeTimeBounds(results);
+      const stateNow = get();
+      const newCurrent = timeBounds
+        ? (stateNow.currentTime >= timeBounds.min && stateNow.currentTime <= timeBounds.max
+            ? stateNow.currentTime
+            : timeBounds.min)
+        : stateNow.currentTime;
+
+      set({
+        generatedLayers: results,
+        phase: 'done',
+        progress: null,
+        timeBounds,
+        currentTime: newCurrent,
+      });
       addLog('info', t('log.genComplete'));
     } catch (e) {
       addLog('error', tf('log.genError', e instanceof Error ? e.message : String(e)));
@@ -775,6 +986,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         excelSheets: null,
         excelFile: null,
         joinStats: null,
+        tripAssignmentStats: null,
         stopMapping: [],
         routeMapping: [],
         agencyMapping: [],
@@ -812,6 +1024,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         excelSheets: null,
         excelFile: null,
         joinStats: null,
+        tripAssignmentStats: null,
         stopMapping: [],
         routeMapping: [],
         agencyMapping: [],
@@ -841,6 +1054,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       agencyMapping: [],
       gtfsCandidates: { stop: [], route: [], agency: [] },
       joinStats: null,
+      tripAssignmentStats: null,
     });
     if (get().reconciliationMode === 'auto-match') get().runAllAutoMatch();
   },
@@ -1009,6 +1223,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         agencyMapping: [],
         gtfsCandidates: { stop: [], route: [], agency: [] },
         joinStats: null,
+        tripAssignmentStats: null,
         excelSheets: null,
         excelFile: null,
       });
@@ -1087,6 +1302,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       matchingRouteFilter: '',
       matchingShowRidershipPerTrip: false,
       joinStats: null,
+      tripAssignmentStats: null,
       excelSheets: null,
       excelFile: null,
       routeInfoList: [],

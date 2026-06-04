@@ -5,11 +5,13 @@ import { useControl } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import { ScatterplotLayer, PathLayer, PolygonLayer, ArcLayer } from '@deck.gl/layers';
+import { TripsLayer } from '@deck.gl/geo-layers';
 import type { Layer } from '@deck.gl/core';
 import { useAppStore } from '../../store/app-store';
 import { computeBbox } from '../../geojson/helpers';
 import type { FeatureCollection, Feature } from 'geojson';
 import type { PickingInfo } from '@deck.gl/core';
+import { TimeBar } from './time-bar';
 
 const MAP_STYLE = `${import.meta.env.BASE_URL}pale_vector.json`;
 
@@ -30,6 +32,8 @@ const COLORS: Record<string, [number, number, number, number]> = {
   'matching-segments':[ 27, 186, 214, 230],
   'matching-flow':  [155,  89, 182, 200],
   'matching-od':   [149, 165, 166, 100],
+  'matching-trips': [233,  30,  99, 230],  // ピンク (Material Pink 500)
+  'matching-ridership': [241, 196,  15, 220],
 };
 
 const OUTLINE_COLORS: Record<string, [number, number, number, number]> = {
@@ -111,17 +115,74 @@ function expandToPaths(features: Feature[]): PathDatum[] {
 
 const HIGHLIGHT_COLOR: [number, number, number, number] = [230, 255, 0, 200];
 
+/** 4-tuple 座標 [lon, lat, _, ts] を持つ feature かを判定 */
+function hasTimestamps(fc: FeatureCollection): boolean {
+  const f = fc.features[0];
+  if (!f || f.geometry.type !== 'LineString') return false;
+  const c = (f.geometry.coordinates as number[][])[0];
+  return Array.isArray(c) && c.length >= 4 && typeof c[3] === 'number';
+}
+
 function buildDeckLayers(
   generatedLayers: Record<string, FeatureCollection>,
   onHover: (info: PickingInfo) => void,
   onClick: (info: PickingInfo) => void,
   pinnedInfo: HoverInfo | null,
+  currentTime: number,
+  timeBounds: { min: number; max: number } | null,
+  trailLength: number,
+  fadeTrail: boolean,
 ) {
   const layers: Layer[] = [];
 
   for (const [key, fc] of Object.entries(generatedLayers)) {
     if (fc.features.length === 0) continue;
     const color = COLORS[key] ?? [100, 100, 100, 200];
+
+    // ── Animated layers: TripsLayer (時刻つき LineString) ──
+    const animatable = key === 'trips' || key === 'matching-trips' || key === 'matching-ridership';
+    if (animatable && hasTimestamps(fc) && timeBounds) {
+      const widthFn = (d: Feature): number => {
+        if (key === 'matching-trips') {
+          const v = Number(d.properties?.onboard ?? 0);
+          return Math.max(4, v * 3);
+        }
+        if (key === 'matching-ridership') {
+          const v = Number(d.properties?.passenger_count ?? 1);
+          return Math.max(4, v * 3);
+        }
+        // trips
+        return 6;
+      };
+      layers.push(new TripsLayer({
+        id: key,
+        data: fc.features,
+        getPath: (d: Feature) =>
+          (d.geometry as unknown as { coordinates: number[][] }).coordinates.map(
+            c => [c[0]!, c[1]!] as [number, number],
+          ),
+        getTimestamps: (d: Feature) =>
+          (d.geometry as unknown as { coordinates: number[][] }).coordinates.map(
+            c => Number(c[3] ?? 0),
+          ),
+        getColor: (_d: Feature, { index }: { index: number }) =>
+          pinnedInfo?.sourceLayerId === key && pinnedInfo.index === index ? HIGHLIGHT_COLOR : color,
+        getWidth: widthFn,
+        widthMinPixels: key === 'trips' ? 5 : 4,
+        currentTime,
+        trailLength,
+        fadeTrail,
+        capRounded: true,
+        jointRounded: true,
+        pickable: true,
+        onHover,
+        onClick,
+        updateTriggers: {
+          getColor: [pinnedInfo?.sourceLayerId, pinnedInfo?.index],
+        },
+      }));
+      continue;
+    }
 
     if (key === 'stops') {
       layers.push(new ScatterplotLayer({
@@ -298,6 +359,71 @@ function buildDeckLayers(
         onClick,
         updateTriggers: { getSourceColor: [pinnedInfo?.sourceLayerId, pinnedInfo?.index], getTargetColor: [pinnedInfo?.sourceLayerId, pinnedInfo?.index] },
       }));
+    } else if (key === 'matching-trips') {
+      // 便ごとの区間 onboard を PathLayer で表示。線幅 ∝ √onboard
+      const pathData = expandToPaths(fc.features);
+      const tripHoverClick = (handler: (info: PickingInfo) => void) => (info: PickingInfo) => {
+        if (info.object) {
+          const datum = info.object as PathDatum;
+          handler({ ...info, object: datum.feature } as PickingInfo);
+        } else {
+          handler(info);
+        }
+      };
+      layers.push(new PathLayer({
+        id: `${key}-casing`,
+        data: pathData,
+        getPath: (d: PathDatum) => d.path as unknown as number[],
+        getWidth: (d: PathDatum) => {
+          const v = Number(d.feature.properties?.onboard ?? 0);
+          return Math.max(2, Math.sqrt(v) * 2 + 2);
+        },
+        widthMinPixels: 3,
+        getColor: (_d: PathDatum, { index }: { index: number }) =>
+          pinnedInfo?.sourceLayerId === key && pinnedInfo.index === index ? HIGHLIGHT_COLOR : [255, 255, 255, 200],
+        pickable: false,
+        updateTriggers: { getColor: [pinnedInfo?.sourceLayerId, pinnedInfo?.index] },
+      }));
+      layers.push(new PathLayer({
+        id: key,
+        data: pathData,
+        getPath: (d: PathDatum) => d.path as unknown as number[],
+        getWidth: (d: PathDatum) => {
+          const v = Number(d.feature.properties?.onboard ?? 0);
+          return Math.max(1, Math.sqrt(v) * 1.5);
+        },
+        widthMinPixels: 1,
+        getColor: color,
+        pickable: true,
+        onHover: tripHoverClick(onHover),
+        onClick: tripHoverClick(onClick),
+      }));
+    } else if (key === 'matching-ridership') {
+      // 個票単位の軌跡。Kepler.gl Trip 形式の 4 要素座標だが、現状の MapLibre 描画では
+      // 単純な PathLayer として描く（将来的に TripsLayer による時刻アニメーションに拡張可能）。
+      const pathData = expandToPaths(fc.features);
+      const ridershipHoverClick = (handler: (info: PickingInfo) => void) => (info: PickingInfo) => {
+        if (info.object) {
+          const datum = info.object as PathDatum;
+          handler({ ...info, object: datum.feature } as PickingInfo);
+        } else {
+          handler(info);
+        }
+      };
+      layers.push(new PathLayer({
+        id: key,
+        data: pathData,
+        getPath: (d: PathDatum) => {
+          // Kepler.gl Trip format coordinates are [lon, lat, _, ts]; drop trailing
+          return (d.path as unknown as number[][]).map(c => [c[0]!, c[1]!]) as unknown as number[];
+        },
+        getWidth: (d: PathDatum) => Math.max(1, Math.sqrt(Number(d.feature.properties?.passenger_count ?? 1)) * 1.2),
+        widthMinPixels: 1,
+        getColor: color,
+        pickable: true,
+        onHover: ridershipHoverClick(onHover),
+        onClick: ridershipHoverClick(onClick),
+      }));
     }
   }
 
@@ -336,9 +462,13 @@ export function MapPreview() {
     }
   }, []);
 
+  const currentTime = useAppStore(s => s.currentTime);
+  const timeBounds = useAppStore(s => s.timeBounds);
+  const trailLength = useAppStore(s => s.trailLength);
+  const fadeTrail = useAppStore(s => s.fadeTrail);
   const deckLayers = useMemo(
-    () => buildDeckLayers(generatedLayers, onHover, onClick, pinnedInfo),
-    [generatedLayers, onHover, onClick, pinnedInfo],
+    () => buildDeckLayers(generatedLayers, onHover, onClick, pinnedInfo, currentTime, timeBounds, trailLength, fadeTrail),
+    [generatedLayers, onHover, onClick, pinnedInfo, currentTime, timeBounds, trailLength, fadeTrail],
   );
 
   useEffect(() => {
@@ -402,6 +532,7 @@ export function MapPreview() {
           </div>
         </div>
       )}
+      <TimeBar />
     </div>
   );
 }

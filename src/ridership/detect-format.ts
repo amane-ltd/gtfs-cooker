@@ -26,10 +26,13 @@ export function detectRidershipFormat(headers: string[]): RidershipFormat {
   return 'unknown';
 }
 
-// 時刻 / 日時を表す列名の候補。優先度順（datetime > time > hour）。
+// 時刻 / 日時を表す列名の候補。優先度順（boarding > payment > datetime > time > hour）。
+// matching-trips の便割り当ては「乗車時刻」が必要なので boarding_at を優先する。
 const TIME_COL_CANDIDATES = [
+  // 乗車時刻系（最優先）
+  'boarding_at', 'boarding_time',
   // 日時 / タイムスタンプ
-  'payment_at', 'boarding_at', 'boarding_time', 'alighting_at', 'alighting_time',
+  'payment_at', 'alighting_at', 'alighting_time',
   'record_at', 'recorded_at', 'operated_at', 'datetime', 'timestamp',
   'taken_at', 'used_at',
   // JP
@@ -40,6 +43,34 @@ const TIME_COL_CANDIDATES = [
   // 時刻のみ
   'time', 'hour', 'time_band',
 ];
+
+// 日付列の候補。優先度順。
+const DATE_COL_CANDIDATES = [
+  // 日付＋専用接尾辞
+  'boarding_date', 'service_date', 'operation_date', 'record_date', 'recorded_date',
+  'travel_date', 'trip_date',
+  // JP
+  '乗車日', '運行日', '運転日', '日付', '年月日', '日次',
+  // 単独
+  'date',
+];
+
+function detectDateCol(headers: string[]): string | null {
+  const lcHeaders = headers.map(h => ({ raw: h, lc: h.trim().toLowerCase() }));
+  for (const name of DATE_COL_CANDIDATES) {
+    const target = name.toLowerCase();
+    const exact = lcHeaders.find(h => h.lc === target);
+    if (exact) return exact.raw;
+  }
+  // 部分一致フォールバック（曖昧なので限定的に）
+  const partials = ['_date', '運行日', '日付'];
+  for (const pat of partials) {
+    const target = pat.toLowerCase();
+    const partial = lcHeaders.find(h => h.lc.includes(target));
+    if (partial) return partial.raw;
+  }
+  return null;
+}
 
 function detectTimeCol(headers: string[]): string | null {
   const lcHeaders = headers.map(h => ({ raw: h, lc: h.trim().toLowerCase() }));
@@ -62,6 +93,7 @@ export function defaultFieldConfig(format: RidershipFormat, headers: string[]): 
   const lc = new Set(headers.map(h => h.trim().toLowerCase()));
   const find = (name: string) => headers.find(h => h.trim().toLowerCase() === name) ?? null;
   const timeColAuto = detectTimeCol(headers);
+  const dateColAuto = detectDateCol(headers);
 
   switch (format) {
     case 'commons-detail':
@@ -85,6 +117,7 @@ export function defaultFieldConfig(format: RidershipFormat, headers: string[]): 
         tripIdCol: null,
         passThroughCol: null,
         timeCol: timeColAuto,
+        dateCol: dateColAuto,
       };
     case 'station-aggregate':
       return {
@@ -101,6 +134,7 @@ export function defaultFieldConfig(format: RidershipFormat, headers: string[]): 
         tripIdCol: null,
         passThroughCol: null,
         timeCol: timeColAuto,
+        dateCol: dateColAuto,
       };
     case 'od-aggregate':
       return {
@@ -117,6 +151,7 @@ export function defaultFieldConfig(format: RidershipFormat, headers: string[]): 
         tripIdCol: null,
         passThroughCol: null,
         timeCol: timeColAuto,
+        dateCol: dateColAuto,
       };
     case 'route-aggregate':
       return {
@@ -133,6 +168,7 @@ export function defaultFieldConfig(format: RidershipFormat, headers: string[]): 
         tripIdCol: null,
         passThroughCol: null,
         timeCol: timeColAuto,
+        dateCol: dateColAuto,
       };
     case 'detail':
       return {
@@ -149,6 +185,7 @@ export function defaultFieldConfig(format: RidershipFormat, headers: string[]): 
         tripIdCol: null,
         passThroughCol: null,
         timeCol: timeColAuto,
+        dateCol: dateColAuto,
       };
     case 'stop-trip-detail':
       return {
@@ -165,6 +202,7 @@ export function defaultFieldConfig(format: RidershipFormat, headers: string[]): 
         tripIdCol: find('便id'),
         passThroughCol: find('通過人数'),
         timeCol: timeColAuto,
+        dateCol: dateColAuto,
       };
     default:
       return {
@@ -181,6 +219,7 @@ export function defaultFieldConfig(format: RidershipFormat, headers: string[]): 
         tripIdCol: null,
         passThroughCol: null,
         timeCol: timeColAuto,
+        dateCol: dateColAuto,
       };
   }
 }

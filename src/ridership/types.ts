@@ -67,5 +67,11 @@ export interface RidershipFieldConfig {
   tripIdCol: string | null;
   passThroughCol: string | null;
 
+  /** 日付列（任意）。設定された場合は dateCol を日付ソースとして使い、
+   *  timeCol は時刻 (HH:MM[:SS]) のみとして扱う。
+   *  未設定の場合は timeCol から日付プレフィックスを抽出する。 */
+  dateCol: string | null;
+  /** 時刻 / 日時列。dateCol が未設定なら datetime（YYYY-MM-DD HH:MM:SS など）が前提。
+   *  dateCol が設定済みなら時刻部分のみ（HH:MM:SS）。 */
   timeCol: string | null;
 }

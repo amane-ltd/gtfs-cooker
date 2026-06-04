@@ -15,7 +15,8 @@ const SELECTABLE_FORMATS: { value: RidershipFormat; key: string }[] = [
 
 type MatchingLayerDescKey =
   | 'layer.matching-stops' | 'layer.matching-lines' | 'layer.matching-segments'
-  | 'layer.matching-flow' | 'layer.matching-od';
+  | 'layer.matching-flow' | 'layer.matching-od'
+  | 'layer.matching-trips' | 'layer.matching-ridership';
 
 const MATCHING_SUB_LAYERS: { id: MatchingOutputLayer; label: string; descKey: MatchingLayerDescKey }[] = [
   { id: 'matching-stops', label: 'matching-stops', descKey: 'layer.matching-stops' },
@@ -23,6 +24,8 @@ const MATCHING_SUB_LAYERS: { id: MatchingOutputLayer; label: string; descKey: Ma
   { id: 'matching-segments', label: 'matching-segments', descKey: 'layer.matching-segments' },
   { id: 'matching-flow', label: 'matching-flow', descKey: 'layer.matching-flow' },
   { id: 'matching-od', label: 'matching-od', descKey: 'layer.matching-od' },
+  { id: 'matching-trips', label: 'matching-trips', descKey: 'layer.matching-trips' },
+  { id: 'matching-ridership', label: 'matching-ridership', descKey: 'layer.matching-ridership' },
 ];
 
 function getAvailableMatchingLayers(fieldConfig: RidershipFieldConfig | null): Set<MatchingOutputLayer> {
@@ -30,16 +33,22 @@ function getAvailableMatchingLayers(fieldConfig: RidershipFieldConfig | null): S
   if (!fieldConfig) return available;
   if (fieldConfig.boardingStopCol) available.add('matching-stops');
   if (fieldConfig.routeCol) available.add('matching-lines');
-  if (fieldConfig.boardingStopCol && fieldConfig.alightingStopCol) {
+  const hasOD = fieldConfig.boardingStopCol && fieldConfig.alightingStopCol;
+  const hasTripDetail = fieldConfig.boardingStopCol && fieldConfig.tripIdCol && fieldConfig.timeCol;
+  if (hasOD) {
     available.add('matching-segments');
     available.add('matching-flow');
     available.add('matching-od');
-  } else if (
-    fieldConfig.boardingStopCol &&
-    fieldConfig.tripIdCol &&
-    fieldConfig.timeCol
-  ) {
+  } else if (hasTripDetail) {
     available.add('matching-segments');
+  }
+  // matching-trips: OD（時刻列必須）or 停留所×便別実績
+  if ((hasOD && fieldConfig.timeCol) || hasTripDetail) {
+    available.add('matching-trips');
+  }
+  // matching-ridership: OD（時刻列必須）のみ。停留所×便別実績は OD リンクなしのため不可
+  if (hasOD && fieldConfig.timeCol) {
+    available.add('matching-ridership');
   }
   return available;
 }
@@ -253,6 +262,12 @@ function FieldConfigPanel() {
 
           <div className="field-config-group">
             <ColumnSelect
+              label={t('ridership.dateCol')}
+              value={fieldConfig.dateCol}
+              columns={columns}
+              onChange={v => update({ dateCol: v })}
+            />
+            <ColumnSelect
               label={format === 'stop-trip-detail'
                 ? `${t('ridership.timeCol')} *`
                 : t('ridership.timeCol')}
@@ -378,7 +393,10 @@ function MappingTable({ type, rows }: { type: MappingType; rows: MappingRow[] })
 }
 
 const MAPPING_SUBLAYERS: Record<MappingType, string[]> = {
-  stop: ['matching-stops', 'matching-segments', 'matching-flow', 'matching-od'],
+  stop: [
+    'matching-stops', 'matching-segments', 'matching-flow', 'matching-od',
+    'matching-trips', 'matching-ridership',
+  ],
   route: ['matching-lines'],
   agency: [],
 };
@@ -477,6 +495,7 @@ export function RidershipPanel() {
   const executeJoin = useAppStore(s => s.executeJoin);
   const clearRidership = useAppStore(s => s.clearRidership);
   const joinStats = useAppStore(s => s.joinStats);
+  const tripAssignmentStats = useAppStore(s => s.tripAssignmentStats);
   const matchingOutputLayer = useAppStore(s => s.matchingOutputLayer);
   const setMatchingOutputLayer = useAppStore(s => s.setMatchingOutputLayer);
   const matchingRouteFilter = useAppStore(s => s.matchingRouteFilter);
@@ -663,7 +682,85 @@ export function RidershipPanel() {
               <dt>{t('ridership.coverageRoutes')}</dt><dd>{joinStats.coverageRoutes}%</dd>
             </dl>
           )}
+
+          {tripAssignmentStats && tripAssignmentStats.uniqueDates.length > 0 && (
+            <FeedRangePanel stats={tripAssignmentStats} />
+          )}
         </>
+      )}
+    </div>
+  );
+}
+
+interface FeedRangePanelProps {
+  stats: {
+    assigned: number;
+    inputRows: number;
+    dropped: number;
+    feedStartDate: string | null;
+    feedEndDate: string | null;
+    outOfFeedRange: number;
+    uniqueDates: string[];
+    outOfRangeDates: string[];
+  };
+}
+
+function FeedRangePanel({ stats }: FeedRangePanelProps) {
+  const { t } = useT();
+  const dataStart = stats.uniqueDates[0]!;
+  const dataEnd = stats.uniqueDates[stats.uniqueDates.length - 1]!;
+  const hasFeedRange = !!(stats.feedStartDate && stats.feedEndDate);
+  const isOutOfRange = stats.outOfFeedRange > 0;
+  const hasDropped = stats.dropped > 0;
+  const allInRange = hasFeedRange && !isOutOfRange && !hasDropped;
+  const dropPct = stats.inputRows > 0
+    ? Math.round((stats.dropped / stats.inputRows) * 100)
+    : 0;
+  return (
+    <div className={`feed-range-panel ${allInRange ? 'ok' : (isOutOfRange || hasDropped) ? 'warn' : 'info'}`} style={{ marginTop: 8 }}>
+      <div className="feed-range-title">
+        {allInRange && '✓ '}
+        {(isOutOfRange || hasDropped) && '⚠ '}
+        {t('ridership.feedRange.title')}
+      </div>
+      <dl className="summary">
+        <dt>{t('ridership.feedRange.dataPeriod')}</dt>
+        <dd>{dataStart} 〜 {dataEnd} ({stats.uniqueDates.length} 日)</dd>
+        {hasFeedRange && (
+          <>
+            <dt>{t('ridership.feedRange.feedPeriod')}</dt>
+            <dd>{stats.feedStartDate} 〜 {stats.feedEndDate}</dd>
+          </>
+        )}
+        <dt>{t('ridership.feedRange.input')}</dt>
+        <dd>{stats.inputRows.toLocaleString()} 行</dd>
+        <dt>{t('ridership.feedRange.assigned')}</dt>
+        <dd>{stats.assigned.toLocaleString()} 行</dd>
+        {hasDropped && (
+          <>
+            <dt className="feed-range-warn-key">{t('ridership.feedRange.dropped')}</dt>
+            <dd className="feed-range-warn-val">{stats.dropped.toLocaleString()} 行 ({dropPct}%)</dd>
+          </>
+        )}
+        {isOutOfRange && (
+          <>
+            <dt className="feed-range-warn-key">{t('ridership.feedRange.outOfRange')}</dt>
+            <dd className="feed-range-warn-val">
+              {stats.outOfFeedRange} 日
+              {stats.outOfRangeDates.length > 0 && stats.outOfRangeDates.length <= 5 && (
+                <> ({stats.outOfRangeDates.join(', ')})</>
+              )}
+            </dd>
+          </>
+        )}
+      </dl>
+      {!hasFeedRange && (
+        <div className="feed-range-note">{t('ridership.feedRange.noFeedInfo')}</div>
+      )}
+      {(isOutOfRange || hasDropped) && (
+        <div className="feed-range-note feed-range-warn-note">
+          {t('ridership.feedRange.warnMessage')}
+        </div>
       )}
     </div>
   );

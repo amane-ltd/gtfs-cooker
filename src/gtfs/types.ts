@@ -1,6 +1,7 @@
 export type MatchingOutputLayer =
   | 'matching-stops' | 'matching-lines' | 'matching-segments'
-  | 'matching-flow' | 'matching-od';
+  | 'matching-flow' | 'matching-od'
+  | 'matching-trips' | 'matching-ridership';
 
 export type LayerType =
   | 'stops' | 'lines' | 'trips'
@@ -181,6 +182,30 @@ export const MATCHING_OD_PROPERTIES = [
   'passenger_count',
 ] as const;
 
+// Trips with ridership: 1 feature per (trip, segment), onboard count per segment
+export const MATCHING_TRIPS_PROPERTIES = [
+  'trip_id', 'route_id', 'route_short_name', 'route_long_name',
+  'direction_id', 'service_id',
+  'from_stop_id', 'from_stop_name',
+  'to_stop_id', 'to_stop_name',
+  'departure_time', 'arrival_time',
+  'onboard',                // 区間通過時の乗車中人数
+  'boardings_at_from',      // from_stop での乗車人数
+  'alightings_at_to',       // to_stop での降車人数
+] as const;
+
+// Per-ridership-record trajectory (Kepler.gl Trip format)
+export const MATCHING_RIDERSHIP_PROPERTIES = [
+  'ridership_record_id',
+  'trip_id', 'route_id', 'route_short_name',
+  'boarding_stop_id', 'boarding_stop_name',
+  'boarding_time',
+  'alighting_stop_id', 'alighting_stop_name',
+  'alighting_time',
+  'passenger_count',
+  'duration_min',
+] as const;
+
 export function getAvailableProperties(layer: LayerType): string[] {
   switch (layer) {
     case 'stops':
@@ -212,6 +237,10 @@ export function getAvailableProperties(layer: LayerType): string[] {
       return [...MATCHING_FLOW_PROPERTIES];
     case 'matching-od':
       return [...MATCHING_OD_PROPERTIES];
+    case 'matching-trips':
+      return [...MATCHING_TRIPS_PROPERTIES];
+    case 'matching-ridership':
+      return [...MATCHING_RIDERSHIP_PROPERTIES];
     case 'matching':
       return [];
   }
