@@ -105,6 +105,9 @@ export const TRIPS_DEFAULT_PROPERTIES = [
 export type StopsDissolvedGroupBy = 'none' | 'agency_name' | 'route_id';
 export type LinesDissolvedGroupBy = 'none' | 'agency_id' | 'route_id' | 'shape_id';
 
+/** lines / lines-dissolved の絞り込み対象列。 */
+export type LinesFilterColumn = 'route_id' | 'route_short_name' | 'route_long_name';
+
 export const STOPS_DISSOLVED_PROPERTIES = ['agency_name', 'route_id'] as const;
 export const LINES_DISSOLVED_PROPERTIES = ['agency_id', 'agency_name', 'route_id', 'route_short_name', 'shape_id'] as const;
 export const AREA_PROPERTIES = ['agency_name'] as const;

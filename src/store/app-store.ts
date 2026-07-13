@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { FeatureCollection } from 'geojson';
-import type { GtfsSummary, ValidationResult, LogEntry, LayerType, MatchingOutputLayer, StopsDissolvedGroupBy, LinesDissolvedGroupBy } from '../gtfs/types';
+import type { GtfsSummary, ValidationResult, LogEntry, LayerType, MatchingOutputLayer, StopsDissolvedGroupBy, LinesDissolvedGroupBy, LinesFilterColumn } from '../gtfs/types';
 import { getAvailableProperties } from '../gtfs/types';
 import { getDb, resetDb } from '../db/init';
 import { dropAllTables, loadCsvIntoTable, getTableRowCount, tableExists } from '../db/loader';
@@ -84,6 +84,12 @@ interface AppState {
   concaveMaxEdge: number;
   stopsDissolvedGroupBy: StopsDissolvedGroupBy;
   linesDissolvedGroupBy: LinesDissolvedGroupBy;
+  /** lines / lines-dissolved の絞り込み対象列 */
+  linesFilterColumn: LinesFilterColumn;
+  /** 出力対象とする値のリスト（linesFilterColumn が指す列の値） */
+  linesFilterValues: string[];
+  /** lines レイヤーで値ごとに 1 フィーチャへ集約するか */
+  linesFilterAggregate: boolean;
   selectedProperties: Record<LayerType, string[]>;
   exportFormat: ExportFormat;
   generatedLayers: Record<string, FeatureCollection>;
@@ -136,6 +142,9 @@ interface AppState {
   setConcaveMaxEdge: (e: number) => void;
   setStopsDissolvedGroupBy: (g: StopsDissolvedGroupBy) => void;
   setLinesDissolvedGroupBy: (g: LinesDissolvedGroupBy) => void;
+  setLinesFilterColumn: (c: LinesFilterColumn) => void;
+  setLinesFilterValues: (v: string[]) => void;
+  setLinesFilterAggregate: (v: boolean) => void;
   setMatchingOutputLayer: (layer: MatchingOutputLayer) => void;
   setMatchingRouteFilter: (filter: string) => void;
   setMatchingShowRidershipPerTrip: (v: boolean) => void;
@@ -184,6 +193,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   concaveMaxEdge: 2,
   stopsDissolvedGroupBy: 'none' as StopsDissolvedGroupBy,
   linesDissolvedGroupBy: 'none' as LinesDissolvedGroupBy,
+  linesFilterColumn: 'route_id' as LinesFilterColumn,
+  linesFilterValues: [],
+  linesFilterAggregate: false,
   selectedProperties: { ...initialProperties },
   exportFormat: 'geojson' as ExportFormat,
   generatedLayers: {},
@@ -245,6 +257,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   setConcaveMaxEdge: (e) => set({ concaveMaxEdge: e }),
   setStopsDissolvedGroupBy: (g) => set({ stopsDissolvedGroupBy: g }),
   setLinesDissolvedGroupBy: (g) => set({ linesDissolvedGroupBy: g }),
+  // 列を変えたら選択値はリセット
+  setLinesFilterColumn: (c) => set({ linesFilterColumn: c, linesFilterValues: [] }),
+  setLinesFilterValues: (v) => set({ linesFilterValues: v }),
+  setLinesFilterAggregate: (v) => set({ linesFilterAggregate: v }),
 
   setSelectedProperties: (layer, props) =>
     set(s => ({ selectedProperties: { ...s.selectedProperties, [layer]: props } })),
@@ -422,7 +438,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const props = state.selectedProperties[layer] ?? [];
       const agencyName = state.gtfsSummary?.agencyNames[0] ?? null;
 
-      async function getLinesFC() {
+      async function getLinesFC(opts?: { aggregate?: boolean }) {
         const routes = await queryRoutesWithShapes(db);
         const hasShapes = await tableExists(db, 'shapes');
         let shapePoints: import('../db/queries').ShapePoint[] = [];
@@ -446,7 +462,14 @@ export const useAppStore = create<AppState>((set, get) => ({
             fallbackStops.set(String(route.route_id), stops);
           }
         }
-        return buildLinesGeoJSON(routes, shapePoints, [...getAvailableProperties('lines')], coordinatePrecision, fallbackStops);
+        return buildLinesGeoJSON(
+          routes, shapePoints, [...getAvailableProperties('lines')], coordinatePrecision, fallbackStops,
+          {
+            column: state.linesFilterColumn,
+            values: state.linesFilterValues,
+            aggregate: opts?.aggregate ?? false,
+          },
+        );
       }
 
       const hasRidershipStops = await tableExists(db, 'ridership_by_stop');
@@ -596,7 +619,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       if (layer === 'lines') {
-        results.lines = await getLinesFC();
+        results.lines = await getLinesFC({ aggregate: state.linesFilterAggregate });
         await enrichRoutesWithRidership(results.lines);
         addLog('info', tf('log.features', 'lines', results.lines.features.length));
       }

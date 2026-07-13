@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useAppStore } from '../../store/app-store';
 import { useT } from '../hooks/use-t';
-import type { LayerType, StopsDissolvedGroupBy, LinesDissolvedGroupBy } from '../../gtfs/types';
+import type { LayerType, StopsDissolvedGroupBy, LinesDissolvedGroupBy, LinesFilterColumn } from '../../gtfs/types';
 
 type LayerDescKey =
   | 'layer.stops' | 'layer.lines' | 'layer.trips'
@@ -66,6 +66,12 @@ const LINES_DISSOLVED_GROUP_OPTIONS: { value: LinesDissolvedGroupBy; label: stri
   { value: 'shape_id', label: 'shape_id' },
 ];
 
+const LINES_FILTER_COLUMN_OPTIONS: { value: LinesFilterColumn; label: string }[] = [
+  { value: 'route_id', label: 'route_id' },
+  { value: 'route_short_name', label: 'route_short_name' },
+  { value: 'route_long_name', label: 'route_long_name' },
+];
+
 export function LayerSelector() {
   const { t } = useT();
   const selectedLayer = useAppStore(s => s.selectedLayer);
@@ -82,6 +88,12 @@ export function LayerSelector() {
   const setStopsDissolvedGroupBy = useAppStore(s => s.setStopsDissolvedGroupBy);
   const linesDissolvedGroupBy = useAppStore(s => s.linesDissolvedGroupBy);
   const setLinesDissolvedGroupBy = useAppStore(s => s.setLinesDissolvedGroupBy);
+  const linesFilterColumn = useAppStore(s => s.linesFilterColumn);
+  const setLinesFilterColumn = useAppStore(s => s.setLinesFilterColumn);
+  const linesFilterValues = useAppStore(s => s.linesFilterValues);
+  const setLinesFilterValues = useAppStore(s => s.setLinesFilterValues);
+  const linesFilterAggregate = useAppStore(s => s.linesFilterAggregate);
+  const setLinesFilterAggregate = useAppStore(s => s.setLinesFilterAggregate);
   const hasShapes = useAppStore(s => s.gtfsSummary?.hasShapes ?? false);
   const phase = useAppStore(s => s.phase);
   const routeInfoList = useAppStore(s => s.routeInfoList);
@@ -90,11 +102,34 @@ export function LayerSelector() {
   const setTravelTimeTarget = useAppStore(s => s.setTravelTimeTarget);
   const loadRouteStops = useAppStore(s => s.loadRouteStops);
 
+  const needsRouteInfo = selectedLayer === 'stops' || selectedLayer === 'lines' || selectedLayer === 'lines-dissolved';
   useEffect(() => {
-    if (selectedLayer === 'stops' && (phase === 'loaded' || phase === 'done') && routeInfoList.length === 0) {
+    if (needsRouteInfo && (phase === 'loaded' || phase === 'done') && routeInfoList.length === 0) {
       loadRouteStops();
     }
-  }, [selectedLayer, phase, routeInfoList.length, loadRouteStops]);
+  }, [needsRouteInfo, phase, routeInfoList.length, loadRouteStops]);
+
+  // 絞り込み列の取りうる値（重複排除・自然順ソート）
+  const filterValueOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of routeInfoList) {
+      const v = r[linesFilterColumn];
+      if (v != null && v !== '') set.add(String(v));
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }, [routeInfoList, linesFilterColumn]);
+  const filterValueSet = useMemo(() => new Set(linesFilterValues), [linesFilterValues]);
+
+  // 列変更時・値が初めて揃ったときは全選択で初期化（「全解除」後は再選択しない）
+  const initSigRef = useRef<string>('');
+  useEffect(() => {
+    if (filterValueOptions.length === 0) return;
+    const sig = `${linesFilterColumn}|${filterValueOptions.length}|${filterValueOptions[0]}|${filterValueOptions[filterValueOptions.length - 1]}`;
+    if (initSigRef.current !== sig) {
+      initSigRef.current = sig;
+      setLinesFilterValues([...filterValueOptions]);
+    }
+  }, [linesFilterColumn, filterValueOptions, setLinesFilterValues]);
 
   return (
     <div>
@@ -174,6 +209,76 @@ export function LayerSelector() {
               ))}
           </select>
         </div>
+      )}
+
+      {(selectedLayer === 'lines' || selectedLayer === 'lines-dissolved') && (
+        <>
+          <div className="field" style={{ marginTop: 10 }}>
+            <span className="field-label">{t('layer.linesFilterColumn')}</span>
+            <select
+              className="layer-select"
+              value={linesFilterColumn}
+              onChange={e => setLinesFilterColumn(e.target.value as LinesFilterColumn)}
+            >
+              {LINES_FILTER_COLUMN_OPTIONS.map(opt => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="field">
+            <span className="field-label">
+              {t('layer.linesFilterValues')}
+                <button
+                  style={{ marginLeft: 8, fontSize: 10, cursor: 'pointer', border: 'none', background: 'none', color: 'var(--color-accent)' }}
+                  onClick={() => setLinesFilterValues([...filterValueOptions])}
+                >
+                  {t('props.selectAll')}
+                </button>
+                <button
+                  style={{ marginLeft: 4, fontSize: 10, cursor: 'pointer', border: 'none', background: 'none', color: 'var(--color-accent)' }}
+                  onClick={() => setLinesFilterValues([])}
+                >
+                  {t('props.clearAll')}
+                </button>
+              </span>
+              <div className="property-list" style={{ maxHeight: 200, overflowY: 'auto' }}>
+                <div className="checkbox-group">
+                  {filterValueOptions.map(val => (
+                    <label key={val}>
+                      <input
+                        type="checkbox"
+                        checked={filterValueSet.has(val)}
+                        onChange={() => {
+                          const next = filterValueSet.has(val)
+                            ? linesFilterValues.filter(v => v !== val)
+                            : [...linesFilterValues, val];
+                          setLinesFilterValues(next);
+                        }}
+                      />
+                      <span style={{ fontSize: 10 }}>{val}</span>
+                    </label>
+                  ))}
+                  {filterValueOptions.length === 0 && (
+                    <span style={{ fontSize: 10, color: 'var(--color-muted, #888)' }}>{t('layer.linesFilterEmpty')}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+          {selectedLayer === 'lines' && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, fontSize: 12 }}>
+              <input
+                type="checkbox"
+                checked={linesFilterAggregate}
+                onChange={e => setLinesFilterAggregate(e.target.checked)}
+              />
+              {t('layer.linesFilterAggregate')}
+            </label>
+          )}
+        </>
       )}
 
       {selectedLayer === 'concave' && (

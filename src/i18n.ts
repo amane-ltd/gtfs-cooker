@@ -58,6 +58,10 @@ const en = {
   'layer.concaveMaxEdge': 'Max edge length (km)',
   'layer.groupBy': 'Group by',
   'layer.groupNone': 'None (merge all)',
+  'layer.linesFilterColumn': 'Filter by column',
+  'layer.linesFilterValues': 'Values to output',
+  'layer.linesFilterEmpty': 'No values (load a GTFS feed first)',
+  'layer.linesFilterAggregate': 'Merge all into one (dissolve)',
   'layer.travelTimeTarget': 'Target stop (travel time)',
   'layer.travelTimeNone': '(not set)',
 
@@ -217,6 +221,10 @@ const ja: Dict = {
   'layer.concaveMaxEdge': '最大エッジ長 (km)',
   'layer.groupBy': 'グループ化',
   'layer.groupNone': 'なし（全体を結合）',
+  'layer.linesFilterColumn': '列で絞り込み',
+  'layer.linesFilterValues': '出力する値',
+  'layer.linesFilterEmpty': '値がありません（先に GTFS を読み込んでください）',
+  'layer.linesFilterAggregate': '全てを1つに集約（dissolve）',
   'layer.travelTimeTarget': '対象停留所（所要時間）',
   'layer.travelTimeNone': '（未設定）',
 
