@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://amane-ltd.github.io/gtfs-cooker/sitemap.xml

@@ -1,14 +1,42 @@
 <!doctype html>
-<html lang="en">
+<html lang="ja">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>gtfs-cooker — GTFS to GeoJSON</title>
+    <title>gtfs-cooker — GTFS to GeoJSON 変換ツール</title>
+    <meta
+      name="description"
+      content="gtfs-cooker は GTFS の ZIP ファイルをブラウザだけで GeoJSON に変換するツールです。データは外部送信されず、すべてクライアントサイドで処理されます。停留所・路線のバッファやコンベックスハル、乗降実績の結合にも対応。"
+    />
+    <meta name="robots" content="index,follow" />
+    <link rel="canonical" href="https://amane-ltd.github.io/gtfs-cooker/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="gtfs-cooker — GTFS to GeoJSON 変換ツール" />
+    <meta
+      property="og:description"
+      content="GTFS の ZIP をブラウザだけで GeoJSON に変換。データは外部送信されない完全クライアントサイド処理。"
+    />
+    <meta property="og:url" content="https://amane-ltd.github.io/gtfs-cooker/" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&icon_names=book_4,chevron_left,chevron_right,download,expand_less,expand_more,language,refresh" />
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <h1>gtfs-cooker — GTFS to GeoJSON 変換ツール</h1>
+      <p>
+        gtfs-cooker は GTFS の ZIP ファイルをブラウザだけで GeoJSON
+        に変換するツールです。データは外部に送信されず、すべてクライアントサイドで処理されます。
+      </p>
+      <nav>
+        <p>ドキュメント / Documentation:</p>
+        <ul>
+          <li><a href="https://amane-ltd.github.io/gtfs-cooker/docs/ja/">日本語ドキュメント</a></li>
+          <li><a href="https://amane-ltd.github.io/gtfs-cooker/docs/en/">English documentation</a></li>
+          <li><a href="https://github.com/amane-ltd/gtfs-cooker">GitHub リポジトリ</a></li>
+        </ul>
+      </nav>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

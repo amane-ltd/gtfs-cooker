@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset
+  xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+  xmlns:xhtml="http://www.w3.org/1999/xhtml"
+>
+  <!-- アプリ本体 -->
+  <url>
+    <loc>https://amane-ltd.github.io/gtfs-cooker/</loc>
+    <lastmod>2026-07-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+
+  <!-- ドキュメント トップ -->
+  <url>
+    <loc>https://amane-ltd.github.io/gtfs-cooker/docs/</loc>
+    <lastmod>2026-07-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- ドキュメント: 日本語 -->
+  <url>
+    <loc>https://amane-ltd.github.io/gtfs-cooker/docs/ja/</loc>
+    <lastmod>2026-07-13</lastmod>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://amane-ltd.github.io/gtfs-cooker/docs/ja/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://amane-ltd.github.io/gtfs-cooker/docs/en/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://amane-ltd.github.io/gtfs-cooker/docs/en/" />
+  </url>
+  <url>
+    <loc>https://amane-ltd.github.io/gtfs-cooker/docs/ja/getting-started</loc>
+    <lastmod>2026-07-13</lastmod>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://amane-ltd.github.io/gtfs-cooker/docs/ja/getting-started" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://amane-ltd.github.io/gtfs-cooker/docs/en/getting-started" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://amane-ltd.github.io/gtfs-cooker/docs/en/getting-started" />
+  </url>
+  <url>
+    <loc>https://amane-ltd.github.io/gtfs-cooker/docs/ja/features</loc>
+    <lastmod>2026-07-13</lastmod>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://amane-ltd.github.io/gtfs-cooker/docs/ja/features" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://amane-ltd.github.io/gtfs-cooker/docs/en/features" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://amane-ltd.github.io/gtfs-cooker/docs/en/features" />
+  </url>
+  <url>
+    <loc>https://amane-ltd.github.io/gtfs-cooker/docs/ja/matching</loc>
+    <lastmod>2026-07-13</lastmod>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://amane-ltd.github.io/gtfs-cooker/docs/ja/matching" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://amane-ltd.github.io/gtfs-cooker/docs/en/matching" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://amane-ltd.github.io/gtfs-cooker/docs/en/matching" />
+  </url>
+  <url>
+    <loc>https://amane-ltd.github.io/gtfs-cooker/docs/ja/file-definitions</loc>
+    <lastmod>2026-07-13</lastmod>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://amane-ltd.github.io/gtfs-cooker/docs/ja/file-definitions" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://amane-ltd.github.io/gtfs-cooker/docs/en/file-definitions" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://amane-ltd.github.io/gtfs-cooker/docs/en/file-definitions" />
+  </url>
+
+  <!-- ドキュメント: English -->
+  <url>
+    <loc>https://amane-ltd.github.io/gtfs-cooker/docs/en/</loc>
+    <lastmod>2026-07-13</lastmod>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://amane-ltd.github.io/gtfs-cooker/docs/ja/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://amane-ltd.github.io/gtfs-cooker/docs/en/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://amane-ltd.github.io/gtfs-cooker/docs/en/" />
+  </url>
+  <url>
+    <loc>https://amane-ltd.github.io/gtfs-cooker/docs/en/getting-started</loc>
+    <lastmod>2026-07-13</lastmod>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://amane-ltd.github.io/gtfs-cooker/docs/ja/getting-started" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://amane-ltd.github.io/gtfs-cooker/docs/en/getting-started" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://amane-ltd.github.io/gtfs-cooker/docs/en/getting-started" />
+  </url>
+  <url>
+    <loc>https://amane-ltd.github.io/gtfs-cooker/docs/en/features</loc>
+    <lastmod>2026-07-13</lastmod>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://amane-ltd.github.io/gtfs-cooker/docs/ja/features" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://amane-ltd.github.io/gtfs-cooker/docs/en/features" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://amane-ltd.github.io/gtfs-cooker/docs/en/features" />
+  </url>
+  <url>
+    <loc>https://amane-ltd.github.io/gtfs-cooker/docs/en/matching</loc>
+    <lastmod>2026-07-13</lastmod>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://amane-ltd.github.io/gtfs-cooker/docs/ja/matching" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://amane-ltd.github.io/gtfs-cooker/docs/en/matching" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://amane-ltd.github.io/gtfs-cooker/docs/en/matching" />
+  </url>
+  <url>
+    <loc>https://amane-ltd.github.io/gtfs-cooker/docs/en/file-definitions</loc>
+    <lastmod>2026-07-13</lastmod>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://amane-ltd.github.io/gtfs-cooker/docs/ja/file-definitions" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://amane-ltd.github.io/gtfs-cooker/docs/en/file-definitions" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://amane-ltd.github.io/gtfs-cooker/docs/en/file-definitions" />
+  </url>
+</urlset>
