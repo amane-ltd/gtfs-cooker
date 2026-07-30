@@ -105,7 +105,7 @@ Boarding and alighting counts per stop. No alighting destination, so OD-style la
 
 | Required | Setting | Typical column |
 |----------|---------|----------------|
-| ✅ | Boarding stop | `station_name` / `station_code` |
+| ✅ | Stop | `station_name` / `station_code` |
 | ✅ | Boarding count | `count_on` |
 | ✅ | Alighting count | `count_off` |
 | Optional | Time | `hour` / `time_band` |
