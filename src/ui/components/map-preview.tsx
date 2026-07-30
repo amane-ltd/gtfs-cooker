@@ -193,14 +193,21 @@ function buildDeckLayers(
         radiusMinPixels: 3,
         radiusMaxPixels: 12,
         getFillColor: color,
+        // 選択中の Point のみ黄色く太い枠線で強調し、それ以外は細い白枠のまま。
         getLineColor: (_d: Feature, { index }: { index: number }) =>
           pinnedInfo?.sourceLayerId === key && pinnedInfo.index === index ? HIGHLIGHT_COLOR : [255, 255, 255, 255],
-        lineWidthMinPixels: (pinnedInfo?.sourceLayerId === key) ? 3 : 1,
+        getLineWidth: (_d: Feature, { index }: { index: number }) =>
+          pinnedInfo?.sourceLayerId === key && pinnedInfo.index === index ? 4 : 1,
+        lineWidthUnits: 'pixels',
+        lineWidthMinPixels: 1,
         stroked: true,
         pickable: true,
         onHover,
         onClick,
-        updateTriggers: { getLineColor: [pinnedInfo?.sourceLayerId, pinnedInfo?.index] },
+        updateTriggers: {
+          getLineColor: [pinnedInfo?.sourceLayerId, pinnedInfo?.index],
+          getLineWidth: [pinnedInfo?.sourceLayerId, pinnedInfo?.index],
+        },
       }));
     } else if (key === 'lines' || key === 'trips' || key === 'segments') {
       const pathData = expandToPaths(fc.features);

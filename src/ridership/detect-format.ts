@@ -94,22 +94,79 @@ function detectTimeCol(headers: string[]): string | null {
   return null;
 }
 
+// 各列の候補カラム名（英語/日本語）。優先度順に並べ、完全一致（大小文字無視）で検出する。
+const STOP_CANDIDATES = [
+  'station_name', 'station_code', 'stop_name', 'stop', 'stop_id', 'stop_code',
+  '停留所名', '停留所', '停留所id', '停留所コード', 'バス停名', 'バス停', '駅名', '駅',
+];
+const BOARDING_STOP_CANDIDATES = [
+  'boarding_station_name', 'boarding_station_code', 'boarding_stop_name', 'boarding_stop',
+  'from_stop_name', 'from_stop', 'origin_stop', 'origin',
+  '乗車停留所名', '乗車停留所', '乗車駅', '乗車バス停', '乗車地',
+];
+const ALIGHTING_STOP_CANDIDATES = [
+  'alighting_station_name', 'alighting_station_code', 'alighting_stop_name', 'alighting_stop',
+  'to_stop_name', 'to_stop', 'destination_stop', 'destination',
+  '降車停留所名', '降車停留所', '降車駅', '降車バス停', '降車地',
+];
+const COUNT_ON_CANDIDATES = [
+  'count_on', 'boarding_count', 'board_count', 'ons', 'boardings', 'on_count',
+  '乗車人数', '乗車数', '乗車計', '乗車',
+];
+const COUNT_OFF_CANDIDATES = [
+  'count_off', 'alighting_count', 'alight_count', 'offs', 'alightings', 'off_count',
+  '降車人数', '降車数', '降車計', '降車',
+];
+const COUNT_CANDIDATES = [
+  'count', 'passenger_count', 'ridership', 'riders', 'num_passengers', 'total',
+  '利用者数', '乗降人数', '乗降数', '人数', '件数', '合計',
+];
+const ROUTE_CANDIDATES = [
+  'boarding_route_name', 'route_name', 'route_long_name', 'route_short_name',
+  'boarding_route_id', 'route_id', 'line_name', 'line',
+  '路線名', '路線', '系統名', '系統', '路線id', '系統id',
+];
+const AGENCY_CANDIDATES = [
+  'operating_agency_name', 'operating_agency_code', 'agency_name', 'agency_id', 'agency', 'operator',
+  '事業者名', '事業者', '運行事業者', '運行会社', '会社名',
+];
+const TRIP_ID_CANDIDATES = [
+  'trip_id', 'trip', 'course_id', 'diagram_id',
+  '便id', '便', '便番号', '便no', 'ダイヤ',
+];
+const PASS_THROUGH_CANDIDATES = [
+  'pass_through_count', 'passthrough_count', 'onboard_count', 'onboard', 'through_count',
+  '通過人数', '通過', '車内人数', '乗車中人数',
+];
+
+/** 候補リストから、ヘッダーに完全一致（trim + 大小文字無視）する最初の列名を返す。 */
+function findByCandidates(headers: string[], candidates: string[]): string | null {
+  const lcHeaders = headers.map(h => ({ raw: h, lc: h.trim().toLowerCase() }));
+  for (const cand of candidates) {
+    const target = cand.trim().toLowerCase();
+    const hit = lcHeaders.find(h => h.lc === target);
+    if (hit) return hit.raw;
+  }
+  return null;
+}
+
 export function defaultFieldConfig(format: RidershipFormat, headers: string[]): RidershipFieldConfig {
   const lc = new Set(headers.map(h => h.trim().toLowerCase()));
   const find = (name: string) => headers.find(h => h.trim().toLowerCase() === name) ?? null;
+  const pick = (cands: string[]) => findByCandidates(headers, cands);
   const timeColAuto = detectTimeCol(headers);
   const dateColAuto = detectDateCol(headers);
 
   switch (format) {
     case 'commons-detail':
       return {
-        boardingStopCol: find('boarding_station_name') ?? find('boarding_station_code'),
-        alightingStopCol: find('alighting_station_name') ?? find('alighting_station_code'),
+        boardingStopCol: pick(BOARDING_STOP_CANDIDATES),
+        alightingStopCol: pick(ALIGHTING_STOP_CANDIDATES),
         stopGtfsField: 'stop_name',
         // COMmmmONS は boarding_route_id を GTFS route_id と直接対応させる仕様。
         routeCol: find('boarding_route_id') ?? find('boarding_route_name'),
         routeGtfsField: 'route_id',
-        agencyCol: find('operating_agency_name') ?? find('operating_agency_code'),
+        agencyCol: pick(AGENCY_CANDIDATES),
         agencyGtfsField: 'agency_name',
         countCols: [
           'adult_passenger_count',
@@ -126,7 +183,7 @@ export function defaultFieldConfig(format: RidershipFormat, headers: string[]): 
       };
     case 'station-aggregate':
       return {
-        boardingStopCol: find('station_name') ?? find('station_code'),
+        boardingStopCol: pick(STOP_CANDIDATES),
         alightingStopCol: null,
         stopGtfsField: 'stop_name',
         routeCol: null,
@@ -134,8 +191,8 @@ export function defaultFieldConfig(format: RidershipFormat, headers: string[]): 
         agencyCol: null,
         agencyGtfsField: 'agency_name',
         countCols: [],
-        countOnCol: find('count_on'),
-        countOffCol: find('count_off'),
+        countOnCol: pick(COUNT_ON_CANDIDATES),
+        countOffCol: pick(COUNT_OFF_CANDIDATES),
         tripIdCol: null,
         passThroughCol: null,
         timeCol: timeColAuto,
@@ -143,14 +200,14 @@ export function defaultFieldConfig(format: RidershipFormat, headers: string[]): 
       };
     case 'od-aggregate':
       return {
-        boardingStopCol: find('boarding_station_name') ?? find('boarding_station_code'),
-        alightingStopCol: find('alighting_station_name') ?? find('alighting_station_code'),
+        boardingStopCol: pick(BOARDING_STOP_CANDIDATES),
+        alightingStopCol: pick(ALIGHTING_STOP_CANDIDATES),
         stopGtfsField: 'stop_name',
-        routeCol: null,
+        routeCol: pick(ROUTE_CANDIDATES),
         routeGtfsField: 'route_long_name',
-        agencyCol: null,
+        agencyCol: pick(AGENCY_CANDIDATES),
         agencyGtfsField: 'agency_name',
-        countCols: ['count'].filter(c => lc.has(c)),
+        countCols: [pick(COUNT_CANDIDATES)].filter((c): c is string => c !== null),
         countOnCol: null,
         countOffCol: null,
         tripIdCol: null,
@@ -163,11 +220,11 @@ export function defaultFieldConfig(format: RidershipFormat, headers: string[]): 
         boardingStopCol: null,
         alightingStopCol: null,
         stopGtfsField: 'stop_name',
-        routeCol: find('boarding_route_name') ?? find('route_name') ?? find('boarding_route_id') ?? find('route_id'),
+        routeCol: pick(ROUTE_CANDIDATES),
         routeGtfsField: 'route_long_name',
-        agencyCol: null,
+        agencyCol: pick(AGENCY_CANDIDATES),
         agencyGtfsField: 'agency_name',
-        countCols: ['count'].filter(c => lc.has(c)),
+        countCols: [pick(COUNT_CANDIDATES)].filter((c): c is string => c !== null),
         countOnCol: null,
         countOffCol: null,
         tripIdCol: null,
@@ -177,14 +234,14 @@ export function defaultFieldConfig(format: RidershipFormat, headers: string[]): 
       };
     case 'detail':
       return {
-        boardingStopCol: null,
-        alightingStopCol: null,
+        boardingStopCol: pick(BOARDING_STOP_CANDIDATES),
+        alightingStopCol: pick(ALIGHTING_STOP_CANDIDATES),
         stopGtfsField: 'stop_name',
-        routeCol: null,
+        routeCol: pick(ROUTE_CANDIDATES),
         routeGtfsField: 'route_long_name',
-        agencyCol: null,
+        agencyCol: pick(AGENCY_CANDIDATES),
         agencyGtfsField: 'agency_name',
-        countCols: [],
+        countCols: [pick(COUNT_CANDIDATES)].filter((c): c is string => c !== null),
         countOnCol: null,
         countOffCol: null,
         tripIdCol: null,
@@ -194,20 +251,18 @@ export function defaultFieldConfig(format: RidershipFormat, headers: string[]): 
       };
     case 'stop-trip-detail':
       return {
-        boardingStopCol: find('停留所名') ?? find('停留所') ?? find('停留所id')
-          ?? find('stop_name') ?? find('stop') ?? find('stop_id'),
+        boardingStopCol: pick(STOP_CANDIDATES),
         alightingStopCol: null,
         stopGtfsField: 'stop_name',
-        routeCol: find('路線名') ?? find('路線id')
-          ?? find('route_name') ?? find('route_long_name') ?? find('route_id'),
+        routeCol: pick(ROUTE_CANDIDATES),
         routeGtfsField: 'route_long_name',
         agencyCol: null,
         agencyGtfsField: 'agency_name',
         countCols: [],
-        countOnCol: find('乗車人数') ?? find('boarding_count'),
-        countOffCol: find('降車人数') ?? find('alighting_count'),
-        tripIdCol: find('便id') ?? find('trip_id'),
-        passThroughCol: find('通過人数') ?? find('pass_through_count') ?? find('onboard_count'),
+        countOnCol: pick(COUNT_ON_CANDIDATES),
+        countOffCol: pick(COUNT_OFF_CANDIDATES),
+        tripIdCol: pick(TRIP_ID_CANDIDATES),
+        passThroughCol: pick(PASS_THROUGH_CANDIDATES),
         timeCol: timeColAuto,
         dateCol: dateColAuto,
       };

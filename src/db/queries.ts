@@ -10,6 +10,44 @@ function coerceBigInts<T extends Record<string, unknown>>(obj: T): T {
   return obj;
 }
 
+/**
+ * 時刻帯別 trip 列（trip_04〜trip_27）の SELECT 式を生成する。
+ * - showTimes=false: 便数（COUNT(DISTINCT trip_id)）。従来どおり int。
+ * - showTimes=true : そのバケットの各発車を "MM(route_id)" とし、分の昇順で
+ *                    カンマ連結した文字列（例: "19(5),40(4),43(3)"）。
+ *                    時刻ごとに 1 発車 = 1 ラベルで対応する。
+ * hourRef  … 時（h と比較する式/列）
+ * timeRef  … 分の抽出元となる時刻文字列（式/列, "HH:MM:SS"）
+ * tripIdRef… 便数集計（COUNT DISTINCT）に使う trip_id（式/列）
+ * labelRef … 便時刻表示の括弧内に出す識別子（route_id）（式/列）
+ */
+function hourlyTripColumns(opts: {
+  showTimes: boolean;
+  weekdayFilter: string;
+  hourRef: string;
+  timeRef: string;
+  tripIdRef: string;
+  labelRef: string;
+}): string[] {
+  const { showTimes, weekdayFilter, hourRef, timeRef, tripIdRef, labelRef } = opts;
+  const cols: string[] = [];
+  for (let h = 4; h <= 27; h++) {
+    const padded = String(h).padStart(2, '0');
+    if (showTimes) {
+      const minute = `LPAD(SPLIT_PART(CAST(${timeRef} AS VARCHAR), ':', 2), 2, '0')`;
+      const entry = `${minute} || '(' || CAST(${labelRef} AS VARCHAR) || ')'`;
+      cols.push(
+        `STRING_AGG(CASE WHEN ${weekdayFilter}${hourRef} = ${h} THEN ${entry} END, ',' ORDER BY CAST(${timeRef} AS VARCHAR)) AS trip_${padded}`,
+      );
+    } else {
+      cols.push(
+        `COUNT(DISTINCT CASE WHEN ${weekdayFilter}${hourRef} = ${h} THEN ${tripIdRef} END) AS trip_${padded}`,
+      );
+    }
+  }
+  return cols;
+}
+
 interface StopRow {
   [key: string]: unknown;
 }
@@ -34,12 +72,13 @@ interface RouteWithShapes {
   agency_name: string | null;
   trip_weekday: number;
   trip_holiday: number;
-  trip_04: number; trip_05: number; trip_06: number; trip_07: number;
-  trip_08: number; trip_09: number; trip_10: number; trip_11: number;
-  trip_12: number; trip_13: number; trip_14: number; trip_15: number;
-  trip_16: number; trip_17: number; trip_18: number; trip_19: number;
-  trip_20: number; trip_21: number; trip_22: number; trip_23: number;
-  trip_24: number; trip_25: number; trip_26: number; trip_27: number;
+  // showTripTimes=true のときは "MM(trip_id),..." 文字列、それ以外は便数(int)
+  trip_04: number | string; trip_05: number | string; trip_06: number | string; trip_07: number | string;
+  trip_08: number | string; trip_09: number | string; trip_10: number | string; trip_11: number | string;
+  trip_12: number | string; trip_13: number | string; trip_14: number | string; trip_15: number | string;
+  trip_16: number | string; trip_17: number | string; trip_18: number | string; trip_19: number | string;
+  trip_20: number | string; trip_21: number | string; trip_22: number | string; trip_23: number | string;
+  trip_24: number | string; trip_25: number | string; trip_26: number | string; trip_27: number | string;
   trip_morning: number;
   trip_daytime: number;
   trip_evening: number;
@@ -77,12 +116,13 @@ interface SegmentRow {
   route_short_name: string | null;
   trip_weekday: number;
   trip_holiday: number;
-  trip_04: number; trip_05: number; trip_06: number; trip_07: number;
-  trip_08: number; trip_09: number; trip_10: number; trip_11: number;
-  trip_12: number; trip_13: number; trip_14: number; trip_15: number;
-  trip_16: number; trip_17: number; trip_18: number; trip_19: number;
-  trip_20: number; trip_21: number; trip_22: number; trip_23: number;
-  trip_24: number; trip_25: number; trip_26: number; trip_27: number;
+  // showTripTimes=true のときは "MM(trip_id),..." 文字列、それ以外は便数(int)
+  trip_04: number | string; trip_05: number | string; trip_06: number | string; trip_07: number | string;
+  trip_08: number | string; trip_09: number | string; trip_10: number | string; trip_11: number | string;
+  trip_12: number | string; trip_13: number | string; trip_14: number | string; trip_15: number | string;
+  trip_16: number | string; trip_17: number | string; trip_18: number | string; trip_19: number | string;
+  trip_20: number | string; trip_21: number | string; trip_22: number | string; trip_23: number | string;
+  trip_24: number | string; trip_25: number | string; trip_26: number | string; trip_27: number | string;
   trip_morning: number;
   trip_daytime: number;
   trip_evening: number;
@@ -126,7 +166,7 @@ async function buildAgencyJoin(db: AsyncDuckDB): Promise<{ joinClause: string; n
   };
 }
 
-export async function queryStops(db: AsyncDuckDB): Promise<StopRow[]> {
+export async function queryStops(db: AsyncDuckDB, showTripTimes = false): Promise<StopRow[]> {
   const hasCalendar = await tableExists(db, 'calendar');
   const hasDepartureTime = await columnExists(db, 'stop_times', 'departure_time');
   const { joinClause: agencyJoin, nameExpr: agencyNameExpr } = await buildAgencyJoin(db);
@@ -147,13 +187,14 @@ export async function queryStops(db: AsyncDuckDB): Promise<StopRow[]> {
       ? `COUNT(DISTINCT CASE WHEN c.sunday = 1 THEN t.trip_id END)`
       : `0`;
 
-    const hourlyLines = [];
-    for (let h = 4; h <= 27; h++) {
-      const padded = String(h).padStart(2, '0');
-      hourlyLines.push(
-        `COUNT(DISTINCT CASE WHEN ${weekdayFilter}${hourExpr} = ${h} THEN t.trip_id END) AS trip_${padded}`
-      );
-    }
+    const hourlyLines = hourlyTripColumns({
+      showTimes: showTripTimes,
+      weekdayFilter,
+      hourRef: hourExpr,
+      timeRef: timeCol,
+      tripIdRef: 't.trip_id',
+      labelRef: 't.route_id',
+    });
 
     const sql = `
       WITH stop_routes AS (
@@ -215,7 +256,7 @@ export async function queryShapePoints(db: AsyncDuckDB): Promise<ShapePoint[]> {
   }
 }
 
-export async function queryRoutesWithShapes(db: AsyncDuckDB): Promise<RouteWithShapes[]> {
+export async function queryRoutesWithShapes(db: AsyncDuckDB, showTripTimes = false): Promise<RouteWithShapes[]> {
   const hasCalendar = await tableExists(db, 'calendar');
   const hasDepartureTime = await columnExists(db, 'stop_times', 'departure_time');
   const { joinClause: agencyJoin, nameExpr: agencyNameExpr } = await buildAgencyJoin(db);
@@ -236,13 +277,14 @@ export async function queryRoutesWithShapes(db: AsyncDuckDB): Promise<RouteWithS
       ? `COUNT(DISTINCT CASE WHEN c.sunday = 1 THEN th.trip_id END)`
       : `0`;
 
-    const hourlyLines = [];
-    for (let h = 4; h <= 27; h++) {
-      const padded = String(h).padStart(2, '0');
-      hourlyLines.push(
-        `COUNT(DISTINCT CASE WHEN ${weekdayFilter}th.first_hour = ${h} THEN th.trip_id END) AS trip_${padded}`
-      );
-    }
+    const hourlyLines = hourlyTripColumns({
+      showTimes: showTripTimes,
+      weekdayFilter,
+      hourRef: 'th.first_hour',
+      timeRef: 'th.first_time',
+      tripIdRef: 'th.trip_id',
+      labelRef: 'th.route_id',
+    });
 
     const agencyIdSelect = routeHasAgencyId ? `r.agency_id` : `NULL AS agency_id`;
     const agencyIdGroup = routeHasAgencyId ? `, r.agency_id` : '';
@@ -254,7 +296,8 @@ export async function queryRoutesWithShapes(db: AsyncDuckDB): Promise<RouteWithS
           CAST(t.route_id AS VARCHAR) AS route_id,
           CAST(t.service_id AS VARCHAR) AS service_id,
           CAST(t.shape_id AS VARCHAR) AS shape_id,
-          MIN(${hourExpr}) AS first_hour
+          MIN(${hourExpr}) AS first_hour,
+          MIN(CAST(${timeCol} AS VARCHAR)) AS first_time
         FROM trips t
         JOIN stop_times st ON CAST(t.trip_id AS VARCHAR) = CAST(st.trip_id AS VARCHAR)
         GROUP BY t.trip_id, t.route_id, t.service_id, t.shape_id
@@ -518,7 +561,7 @@ export async function queryTravelTimesToStops(
   return result;
 }
 
-export async function querySegments(db: AsyncDuckDB): Promise<SegmentRow[]> {
+export async function querySegments(db: AsyncDuckDB, showTripTimes = false): Promise<SegmentRow[]> {
   const hasCalendar = await tableExists(db, 'calendar');
   const hasDepartureTime = await columnExists(db, 'stop_times', 'departure_time');
   const conn = await db.connect();
@@ -538,13 +581,14 @@ export async function querySegments(db: AsyncDuckDB): Promise<SegmentRow[]> {
       ? `COUNT(DISTINCT CASE WHEN sunday = 1 THEN trip_id END)`
       : `0`;
 
-    const hourlyLines = [];
-    for (let h = 4; h <= 27; h++) {
-      const padded = String(h).padStart(2, '0');
-      hourlyLines.push(
-        `COUNT(DISTINCT CASE WHEN ${weekdayFilter}hour = ${h} THEN trip_id END) AS trip_${padded}`
-      );
-    }
+    const hourlyLines = hourlyTripColumns({
+      showTimes: showTripTimes,
+      weekdayFilter,
+      hourRef: 'hour',
+      timeRef: 'dep_time',
+      tripIdRef: 'trip_id',
+      labelRef: 'route_id',
+    });
 
     const result = await conn.query(`
       WITH ordered AS (
@@ -555,6 +599,7 @@ export async function querySegments(db: AsyncDuckDB): Promise<SegmentRow[]> {
           CAST(st.stop_sequence AS INTEGER) AS stop_sequence,
           CAST(t.trip_id AS VARCHAR) AS trip_id,
           ${hourExpr} AS hour,
+          CAST(${timeCol} AS VARCHAR) AS dep_time,
           ${hasCalendar ? 'c.monday, c.sunday,' : ''}
           LEAD(CAST(st.stop_id AS VARCHAR)) OVER (
             PARTITION BY st.trip_id ORDER BY CAST(st.stop_sequence AS INTEGER)

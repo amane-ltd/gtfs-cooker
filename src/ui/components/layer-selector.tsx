@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../../store/app-store';
 import { useT } from '../hooks/use-t';
 import type { LayerType, StopsDissolvedGroupBy, LinesDissolvedGroupBy, LinesFilterColumn } from '../../gtfs/types';
@@ -53,6 +53,12 @@ const LAYER_GROUPS: { group: string; layers: { id: LayerType; label: string; des
 
 const BUFFER_LAYERS: LayerType[] = ['stops-buffer', 'lines-buffer', 'stops-dissolved', 'lines-dissolved'];
 
+// 時刻帯別 trip 列（trip_04〜27）を出力するレイヤー
+const TRIP_COLUMN_LAYERS = new Set<string>([
+  'stops', 'lines', 'segments',
+  'matching-stops', 'matching-lines', 'matching-segments',
+]);
+
 const STOPS_DISSOLVED_GROUP_OPTIONS: { value: StopsDissolvedGroupBy; label: string }[] = [
   { value: 'none', label: '' },
   { value: 'agency_name', label: 'agency_name' },
@@ -76,6 +82,9 @@ export function LayerSelector() {
   const { t } = useT();
   const selectedLayer = useAppStore(s => s.selectedLayer);
   const selectLayer = useAppStore(s => s.selectLayer);
+  const matchingOutputLayer = useAppStore(s => s.matchingOutputLayer);
+  const showTripTimes = useAppStore(s => s.showTripTimes);
+  const setShowTripTimes = useAppStore(s => s.setShowTripTimes);
   const tripsBaseDate = useAppStore(s => s.tripsBaseDate);
   const setTripsBaseDate = useAppStore(s => s.setTripsBaseDate);
   const tripsRouteFilter = useAppStore(s => s.tripsRouteFilter);
@@ -100,7 +109,19 @@ export function LayerSelector() {
   const routeStopsByRoute = useAppStore(s => s.routeStopsByRoute);
   const travelTimeTargets = useAppStore(s => s.travelTimeTargets);
   const setTravelTimeTarget = useAppStore(s => s.setTravelTimeTarget);
+  const clearTravelTimeTargets = useAppStore(s => s.clearTravelTimeTargets);
   const loadRouteStops = useAppStore(s => s.loadRouteStops);
+
+  // 「対象停留所（所要時間）」の開閉。対象が既に設定済みなら開いた状態で初期化。
+  const [travelTimeOpen, setTravelTimeOpen] = useState(() => Object.keys(travelTimeTargets).length > 0);
+  const onToggleTravelTime = (checked: boolean) => {
+    setTravelTimeOpen(checked);
+    if (!checked) clearTravelTimeTargets();
+  };
+
+  // 時刻帯別 trip 列を持つレイヤーでのみ「便時刻表示」トグルを出す
+  const effectiveLayer: string = selectedLayer === 'matching' ? matchingOutputLayer : selectedLayer;
+  const showTripTimesToggle = TRIP_COLUMN_LAYERS.has(effectiveLayer);
 
   const needsRouteInfo = selectedLayer === 'stops' || selectedLayer === 'lines' || selectedLayer === 'lines-dissolved';
   useEffect(() => {
@@ -148,6 +169,17 @@ export function LayerSelector() {
           </optgroup>
         ))}
       </select>
+
+      {showTripTimesToggle && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: 12 }}>
+          <input
+            type="checkbox"
+            checked={showTripTimes}
+            onChange={e => setShowTripTimes(e.target.checked)}
+          />
+          {t('layer.showTripTimes')}
+        </label>
+      )}
 
       {selectedLayer === 'trips' && (
         <>
@@ -296,29 +328,38 @@ export function LayerSelector() {
 
       {selectedLayer === 'stops' && routeInfoList.length > 0 && (
         <div className="field" style={{ marginTop: 10 }}>
-          <span className="field-label">{t('layer.travelTimeTarget')}</span>
-          <div style={{ maxHeight: 200, overflowY: 'auto' }}>
-            {routeInfoList.map(route => (
-              <div key={route.route_id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <span style={{ fontSize: 12, minWidth: 80, flexShrink: 0 }}>
-                  {route.route_short_name || route.route_long_name || route.route_id}
-                </span>
-                <select
-                  className="layer-select"
-                  style={{ flex: 1, fontSize: 12 }}
-                  value={travelTimeTargets[route.route_id] ?? ''}
-                  onChange={e => setTravelTimeTarget(route.route_id, e.target.value)}
-                >
-                  <option value="">{t('layer.travelTimeNone')}</option>
-                  {(routeStopsByRoute[route.route_id] ?? []).map(stop => (
-                    <option key={stop.stop_id} value={stop.stop_id}>
-                      {stop.stop_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ))}
-          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+            <input
+              type="checkbox"
+              checked={travelTimeOpen}
+              onChange={e => onToggleTravelTime(e.target.checked)}
+            />
+            {t('layer.travelTimeTarget')}
+          </label>
+          {travelTimeOpen && (
+            <div style={{ maxHeight: 200, overflowY: 'auto', marginTop: 6 }}>
+              {routeInfoList.map(route => (
+                <div key={route.route_id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, minWidth: 80, flexShrink: 0 }}>
+                    {route.route_short_name || route.route_long_name || route.route_id}
+                  </span>
+                  <select
+                    className="layer-select"
+                    style={{ flex: 1, fontSize: 12 }}
+                    value={travelTimeTargets[route.route_id] ?? ''}
+                    onChange={e => setTravelTimeTarget(route.route_id, e.target.value)}
+                  >
+                    <option value="">{t('layer.travelTimeNone')}</option>
+                    {(routeStopsByRoute[route.route_id] ?? []).map(stop => (
+                      <option key={stop.stop_id} value={stop.stop_id}>
+                        {stop.stop_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

@@ -17,6 +17,7 @@ export function PropertyPicker() {
   const setSelectedProperties = useAppStore(s => s.setSelectedProperties);
   const exportFormat = useAppStore(s => s.exportFormat);
   const setExportFormat = useAppStore(s => s.setExportFormat);
+  const matchingShowRidershipPerTrip = useAppStore(s => s.matchingShowRidershipPerTrip);
 
   const layer = selectedLayer === 'matching' ? matchingOutputLayer : selectedLayer;
 
@@ -38,7 +39,11 @@ export function PropertyPicker() {
       </div>
 
       {(() => {
-        const available = getAvailableProperties(layer);
+        // 「便あたり乗車人数の列を追加」トグルと出力プロパティ一覧を一致させる。
+        // トグル OFF のときは per-trip 列（生成側でも付与されない）を一覧から除外する。
+        const available = matchingShowRidershipPerTrip
+          ? getAvailableProperties(layer)
+          : getAvailableProperties(layer).filter(p => !p.startsWith('ridership_per_trip'));
         const selected = selectedProperties[layer] ?? [];
         const selectedSet = new Set(selected);
 

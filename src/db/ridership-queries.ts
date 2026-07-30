@@ -369,6 +369,7 @@ export async function executeRidershipJoin(
 
     // ── ridership_by_stop ──────────────────────────
     await conn.query(`DROP TABLE IF EXISTS ridership_by_stop`);
+    await conn.query(`DROP TABLE IF EXISTS ridership_allcols_by_stop`);
 
     if (config.boardingStopCol) {
       const boardCol = esc(config.boardingStopCol);
@@ -446,10 +447,26 @@ export async function executeRidershipJoin(
           GROUP BY ${stopIdOn}
         `);
       }
+
+      // 「すべてのカラムを結合する」用: GTFS 停留所値ごとに CSV 行の全列を保持する。
+      // 重複キーは先頭行を採用（ROW_NUMBER で __rn=1 を選択）。
+      await conn.query(`
+        CREATE TABLE ridership_allcols_by_stop AS
+        SELECT * EXCLUDE (__rn)
+        FROM (
+          SELECT ${stopIdOn} AS __gtfs_stop_val,
+                 r.*,
+                 ROW_NUMBER() OVER (PARTITION BY ${stopIdOn}) AS __rn
+          FROM ridership r ${stopJoinOn}
+          WHERE ${stopIdOn} IS NOT NULL
+        )
+        WHERE __rn = 1
+      `);
     }
 
     // ── ridership_by_route ─────────────────────────
     await conn.query(`DROP TABLE IF EXISTS ridership_by_route`);
+    await conn.query(`DROP TABLE IF EXISTS ridership_allcols_by_route`);
 
     if (config.routeCol) {
       const routeColE = esc(config.routeCol);
@@ -468,6 +485,20 @@ export async function executeRidershipJoin(
         FROM ridership r ${routeJoin}
         WHERE ${routeId} IS NOT NULL
         GROUP BY ${routeId}
+      `);
+
+      // 「すべてのカラムを結合する」用: GTFS 系統値ごとに CSV 行の全列を保持（先頭行採用）。
+      await conn.query(`
+        CREATE TABLE ridership_allcols_by_route AS
+        SELECT * EXCLUDE (__rn)
+        FROM (
+          SELECT ${routeId} AS __gtfs_route_val,
+                 r.*,
+                 ROW_NUMBER() OVER (PARTITION BY ${routeId}) AS __rn
+          FROM ridership r ${routeJoin}
+          WHERE ${routeId} IS NOT NULL
+        )
+        WHERE __rn = 1
       `);
     }
 

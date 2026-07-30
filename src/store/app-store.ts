@@ -110,6 +110,14 @@ interface AppState {
   matchingOutputLayer: MatchingOutputLayer;
   matchingRouteFilter: string;
   matchingShowRidershipPerTrip: boolean;
+  /** true のとき stops/lines/segments の時刻帯別 trip 列を「分(便ID)」の便時刻表示にする */
+  showTripTimes: boolean;
+  /** 停留所集計/系統集計で、マッチした要素に CSV の全列を原値で付与する */
+  matchingJoinAllColumns: boolean;
+  /** マッチした停留所/系統のみを出力する（未マッチの GTFS 要素を除外） */
+  matchingOnlyMatched: boolean;
+  /** 停留所列/系統列に重複値がある場合の警告（なければ null） */
+  keyColumnDuplicates: { column: string; count: number } | null;
   excelSheets: string[] | null;
   excelFile: File | null;
   is3D: boolean;
@@ -148,6 +156,10 @@ interface AppState {
   setMatchingOutputLayer: (layer: MatchingOutputLayer) => void;
   setMatchingRouteFilter: (filter: string) => void;
   setMatchingShowRidershipPerTrip: (v: boolean) => void;
+  setShowTripTimes: (v: boolean) => void;
+  setMatchingJoinAllColumns: (v: boolean) => void;
+  setMatchingOnlyMatched: (v: boolean) => void;
+  checkKeyColumnDuplicates: () => Promise<void>;
 
   setCurrentTime: (t: number) => void;
   setPlaybackSpeed: (s: number) => void;
@@ -175,6 +187,7 @@ interface AppState {
   clearRidership: () => Promise<void>;
   loadRouteStops: () => Promise<void>;
   setTravelTimeTarget: (routeId: string, stopId: string) => void;
+  clearTravelTimeTargets: () => void;
 }
 
 const initialProperties = Object.fromEntries(
@@ -215,6 +228,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   matchingOutputLayer: 'matching-stops' as MatchingOutputLayer,
   matchingRouteFilter: '',
   matchingShowRidershipPerTrip: false,
+  showTripTimes: false,
+  matchingJoinAllColumns: false,
+  matchingOnlyMatched: false,
+  keyColumnDuplicates: null,
   excelSheets: null,
   excelFile: null,
   is3D: false,
@@ -232,6 +249,40 @@ export const useAppStore = create<AppState>((set, get) => ({
   setMatchingOutputLayer: (layer) => set({ matchingOutputLayer: layer }),
   setMatchingRouteFilter: (filter) => set({ matchingRouteFilter: filter }),
   setMatchingShowRidershipPerTrip: (v) => set({ matchingShowRidershipPerTrip: v }),
+  setShowTripTimes: (v) => set({ showTripTimes: v }),
+  setMatchingJoinAllColumns: (v) => set({ matchingJoinAllColumns: v }),
+  setMatchingOnlyMatched: (v) => set({ matchingOnlyMatched: v }),
+
+  checkKeyColumnDuplicates: async () => {
+    const { fieldConfig, ridershipSummary } = get();
+    const fmt = ridershipSummary?.format;
+    if (!fieldConfig || (fmt !== 'station-aggregate' && fmt !== 'route-aggregate')) {
+      set({ keyColumnDuplicates: null });
+      return;
+    }
+    const col = fmt === 'station-aggregate' ? fieldConfig.boardingStopCol : fieldConfig.routeCol;
+    if (!col) { set({ keyColumnDuplicates: null }); return; }
+    const q = `"${col.replace(/"/g, '""')}"`;
+    try {
+      const db = await getDb();
+      const conn = await db.connect();
+      try {
+        const res = await conn.query(
+          `SELECT COUNT(*) AS dupvals FROM (
+             SELECT ${q} FROM ridership
+             WHERE ${q} IS NOT NULL AND CAST(${q} AS VARCHAR) != ''
+             GROUP BY ${q} HAVING COUNT(*) > 1
+           )`,
+        );
+        const n = Number((res.toArray()[0]?.toJSON() as { dupvals?: unknown })?.dupvals ?? 0);
+        set({ keyColumnDuplicates: n > 0 ? { column: col, count: n } : null });
+      } finally {
+        await conn.close();
+      }
+    } catch {
+      set({ keyColumnDuplicates: null });
+    }
+  },
 
   setCurrentTime: (t) => set({ currentTime: t }),
   setPlaybackSpeed: (s) => set({ playbackSpeed: s }),
@@ -439,7 +490,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const agencyName = state.gtfsSummary?.agencyNames[0] ?? null;
 
       async function getLinesFC(opts?: { aggregate?: boolean }) {
-        const routes = await queryRoutesWithShapes(db);
+        const routes = await queryRoutesWithShapes(db, state.showTripTimes);
         const hasShapes = await tableExists(db, 'shapes');
         let shapePoints: import('../db/queries').ShapePoint[] = [];
         if (hasShapes) {
@@ -509,6 +560,29 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       }
 
+      // 「すべてのカラムを結合する」用: allcols テーブルを読み、キー値→CSV 全列 の Map を返す。
+      // 内部キー列（__gtfs_stop_val など）は除去する。テーブルが無ければ null。
+      async function loadAllCols(
+        conn2: Awaited<ReturnType<typeof db.connect>>,
+        table: string,
+        keyCol: string,
+      ): Promise<Map<string, Record<string, unknown>> | null> {
+        if (!(await tableExists(db, table))) return null;
+        const res = await conn2.query(`SELECT * FROM ${table}`);
+        const m = new Map<string, Record<string, unknown>>();
+        for (const row of res.toArray()) {
+          const o = row.toJSON() as Record<string, unknown>;
+          const key = String(o[keyCol] ?? '');
+          const rec: Record<string, unknown> = {};
+          for (const k of Object.keys(o)) {
+            if (k === keyCol) continue;
+            rec[k] = typeof o[k] === 'bigint' ? Number(o[k]) : o[k];
+          }
+          m.set(key, rec);
+        }
+        return m;
+      }
+
       async function enrichStopsWithRidership(fc: FeatureCollection) {
         if (!hasRidershipStops) return fc;
         const conn2 = await db.connect();
@@ -523,16 +597,33 @@ export const useAppStore = create<AppState>((set, get) => ({
               hourly: extractHourly(o),
             });
           }
+          // 「すべてのカラムを結合する」: CSV 行の全列（先頭行）を GTFS 停留所値ごとに取得
+          const allCols = state.matchingJoinAllColumns
+            ? await loadAllCols(conn2, 'ridership_allcols_by_stop', '__gtfs_stop_val')
+            : null;
+          // 全カラム結合時、乗車数/降車数の列が未指定なら集計列（ridership_on/off 等）は
+          // 出さず、CSV 元列だけを残す（元のカラム名を踏襲）。
+          const emitCounts = !state.matchingJoinAllColumns
+            || !!(rFieldConfig?.countOnCol || rFieldConfig?.countOffCol);
           const matchProp = rFieldConfig?.stopGtfsField ?? 'stop_name';
+          const matched: typeof fc.features = [];
           for (const feat of fc.features) {
             const sid = String(feat.properties?.[matchProp] ?? '');
             const r = map.get(sid);
             if (r) {
-              const props = { ...feat.properties, ridership_on: r.count_on, ridership_off: r.count_off, ...r.hourly };
-              attachRatioCols(props, r.count_on + r.count_off, r.hourly);
+              // allCols を先に展開し、GTFS プロパティで上書き（列名衝突時は GTFS を優先）
+              const props: Record<string, unknown> = { ...(allCols?.get(sid) ?? {}), ...feat.properties };
+              if (emitCounts) {
+                props.ridership_on = r.count_on;
+                props.ridership_off = r.count_off;
+                Object.assign(props, r.hourly);
+                attachRatioCols(props, r.count_on + r.count_off, r.hourly);
+              }
               feat.properties = props;
+              matched.push(feat);
             }
           }
+          if (state.matchingOnlyMatched) fc.features = matched;
         } finally {
           await conn2.close();
         }
@@ -552,16 +643,29 @@ export const useAppStore = create<AppState>((set, get) => ({
               hourly: extractHourly(o),
             });
           }
+          const allCols = state.matchingJoinAllColumns
+            ? await loadAllCols(conn2, 'ridership_allcols_by_route', '__gtfs_route_val')
+            : null;
+          // 全カラム結合時、乗降数の列が未指定なら集計列（ridership_count 等）は出さない。
+          const emitCounts = !state.matchingJoinAllColumns
+            || (rFieldConfig?.countCols?.length ?? 0) > 0;
           const matchProp = rFieldConfig?.routeGtfsField ?? 'route_long_name';
+          const matched: typeof fc.features = [];
           for (const feat of fc.features) {
             const rid = String(feat.properties?.[matchProp] ?? '');
             const entry = map.get(rid);
             if (entry !== undefined) {
-              const props = { ...feat.properties, ridership_count: entry.count, ...entry.hourly };
-              attachRatioCols(props, entry.count, entry.hourly);
+              const props: Record<string, unknown> = { ...(allCols?.get(rid) ?? {}), ...feat.properties };
+              if (emitCounts) {
+                props.ridership_count = entry.count;
+                Object.assign(props, entry.hourly);
+                attachRatioCols(props, entry.count, entry.hourly);
+              }
               feat.properties = props;
+              matched.push(feat);
             }
           }
+          if (state.matchingOnlyMatched) fc.features = matched;
         } finally {
           await conn2.close();
         }
@@ -583,6 +687,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           }
           const matchProp = rFieldConfig?.stopGtfsField === 'stop_name' ? 'from_stop_name' : 'from_stop_id';
           const matchProp2 = rFieldConfig?.stopGtfsField === 'stop_name' ? 'to_stop_name' : 'to_stop_id';
+          const matched: typeof fc.features = [];
           for (const feat of fc.features) {
             const key = `${feat.properties?.[matchProp]}->${feat.properties?.[matchProp2]}`;
             const entry = map.get(key);
@@ -590,8 +695,10 @@ export const useAppStore = create<AppState>((set, get) => ({
               const props = { ...feat.properties, ridership: entry.riders, ...entry.hourly };
               attachRatioCols(props, entry.riders, entry.hourly);
               feat.properties = props;
+              matched.push(feat);
             }
           }
+          if (state.matchingOnlyMatched) fc.features = matched;
         } finally {
           await conn2.close();
         }
@@ -599,7 +706,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       if (layer === 'stops') {
-        const rows = await queryStops(db);
+        const rows = await queryStops(db, state.showTripTimes);
         results.stops = buildStopsGeoJSON(rows, props, coordinatePrecision);
         const travelTimeMap = await queryTravelTimesToStops(db, state.travelTimeTargets);
         for (const feat of results.stops.features) {
@@ -639,7 +746,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       if (layer === 'stops-buffer') {
-        const rows = await queryStops(db);
+        const rows = await queryStops(db, state.showTripTimes);
         const stopsFC = buildStopsGeoJSON(rows, [...getAvailableProperties('stops')], coordinatePrecision);
         results['stops-buffer'] = buildStopsBuffer(stopsFC, state.bufferRadius);
         addLog('info', tf('log.features', 'stops-buffer', results['stops-buffer'].features.length));
@@ -653,7 +760,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       if (layer === 'stops-dissolved') {
         const groupBy = state.stopsDissolvedGroupBy;
-        const rows = await queryStops(db);
+        const rows = await queryStops(db, state.showTripTimes);
         const stopsFC = buildStopsGeoJSON(rows, [...getAvailableProperties('stops')], coordinatePrecision);
         const listKey = groupBy === 'route_id' ? 'routes' : undefined;
         const dissolvedFC = buildStopsDissolved(
@@ -700,28 +807,28 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       if (layer === 'envelope') {
-        const rows = await queryStops(db);
+        const rows = await queryStops(db, state.showTripTimes);
         const stopsFC = buildStopsGeoJSON(rows, ['stop_id'], coordinatePrecision);
         results.envelope = buildEnvelope(stopsFC, agencyName);
         addLog('info', tf('log.features', 'envelope', results.envelope.features.length));
       }
 
       if (layer === 'convex') {
-        const rows = await queryStops(db);
+        const rows = await queryStops(db, state.showTripTimes);
         const stopsFC = buildStopsGeoJSON(rows, ['stop_id'], coordinatePrecision);
         results.convex = buildConvexHull(stopsFC, agencyName);
         addLog('info', tf('log.features', 'convex', results.convex.features.length));
       }
 
       if (layer === 'concave') {
-        const rows = await queryStops(db);
+        const rows = await queryStops(db, state.showTripTimes);
         const stopsFC = buildStopsGeoJSON(rows, ['stop_id'], coordinatePrecision);
         results.concave = buildConcaveHull(stopsFC, state.concaveMaxEdge, agencyName);
         addLog('info', tf('log.features', 'concave', results.concave.features.length));
       }
 
       if (layer === 'segments') {
-        const segRows = await querySegments(db);
+        const segRows = await querySegments(db, state.showTripTimes);
         results.segments = buildSegmentsGeoJSON(segRows, props, coordinatePrecision);
         await enrichSegmentsWithRidership(results.segments);
         addLog('info', tf('log.features', 'segments', results.segments.features.length));
@@ -768,7 +875,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       if (layer === 'matching-stops') {
-        const rows = await queryStops(db);
+        const rows = await queryStops(db, state.showTripTimes);
         const stopsFC = buildStopsGeoJSON(rows, [...getAvailableProperties('stops')], coordinatePrecision);
         await enrichStopsWithRidership(stopsFC);
         await applyRouteFilterByStop(stopsFC);
@@ -785,7 +892,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       if (layer === 'matching-segments') {
-        const segRows = await querySegments(db);
+        const segRows = await querySegments(db, state.showTripTimes);
         const segFC = buildSegmentsGeoJSON(segRows, [...getAvailableProperties('segments')], coordinatePrecision);
         await enrichSegmentsWithRidership(segFC);
         applyRouteFilter(segFC, 'route_id', 'route_short_name');
@@ -1295,6 +1402,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
   },
 
+  clearTravelTimeTargets: () => set({ travelTimeTargets: {} }),
+
   reset: async () => {
     await resetDb();
     set({
@@ -1324,6 +1433,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       matchingOutputLayer: 'matching-stops' as MatchingOutputLayer,
       matchingRouteFilter: '',
       matchingShowRidershipPerTrip: false,
+      showTripTimes: false,
+      matchingJoinAllColumns: false,
+      matchingOnlyMatched: false,
+      keyColumnDuplicates: null,
       joinStats: null,
       tripAssignmentStats: null,
       excelSheets: null,

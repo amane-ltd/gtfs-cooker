@@ -4,6 +4,7 @@ const RIDERSHIP_TABLES = [
   'ridership', 'stop_mapping', 'route_mapping', 'agency_mapping',
   'ridership_by_stop', 'ridership_by_route', 'ridership_by_segment',
   'ridership_by_flow', 'ridership_arc',
+  'ridership_allcols_by_stop', 'ridership_allcols_by_route',
 ] as const;
 
 export async function dropRidershipTables(db: AsyncDuckDB): Promise<void> {

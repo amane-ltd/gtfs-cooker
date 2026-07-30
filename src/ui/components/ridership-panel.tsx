@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../../store/app-store';
 import { useT } from '../hooks/use-t';
 import { ProgressBar } from './progress-bar';
@@ -111,24 +111,32 @@ interface FieldVisibility {
   route: boolean;
   agency: boolean;
   countOnOff: boolean;
+  /** 単一の乗降数列（countCols）。od-aggregate / route-aggregate / detail で使用 */
+  count: boolean;
   tripDetail: boolean;
 }
 
+// ドキュメント（docs/user/ja/matching.md「フォーマット別の列設定方法」）の
+// 必須/任意の列にあわせて、各フォーマットで表示する列だけを返す。
 function getFieldVisibility(format: RidershipFormat): FieldVisibility {
   switch (format) {
     case 'commons-detail':
+      // 乗降数は年齢区分の複数列（自動検出）のため単一 count セレクタは出さない
+      return { boardingStop: true, alightingStop: true, route: true, agency: true, countOnOff: false, count: false, tripDetail: false };
     case 'detail':
-      return { boardingStop: true, alightingStop: true, route: true, agency: true, countOnOff: false, tripDetail: false };
+      return { boardingStop: true, alightingStop: true, route: true, agency: true, countOnOff: false, count: true, tripDetail: false };
     case 'stop-trip-detail':
-      return { boardingStop: true, alightingStop: false, route: true, agency: false, countOnOff: true, tripDetail: true };
+      return { boardingStop: true, alightingStop: false, route: true, agency: false, countOnOff: true, count: false, tripDetail: true };
     case 'od-aggregate':
-      return { boardingStop: true, alightingStop: true, route: true, agency: true, countOnOff: false, tripDetail: false };
+      return { boardingStop: true, alightingStop: true, route: true, agency: true, countOnOff: false, count: true, tripDetail: false };
     case 'station-aggregate':
-      return { boardingStop: true, alightingStop: false, route: true, agency: true, countOnOff: true, tripDetail: false };
+      // 停留所集計: 停留所列 + 乗車/降車数列 + 時刻列（任意）のみ。路線/事業者は使わない。
+      return { boardingStop: true, alightingStop: false, route: false, agency: false, countOnOff: true, count: false, tripDetail: false };
     case 'route-aggregate':
-      return { boardingStop: false, alightingStop: false, route: true, agency: true, countOnOff: false, tripDetail: false };
+      // 系統集計: 路線列 + 乗降数列 + 事業者列/時刻列（任意）。停留所は使わない。
+      return { boardingStop: false, alightingStop: false, route: true, agency: true, countOnOff: false, count: true, tripDetail: false };
     default:
-      return { boardingStop: true, alightingStop: true, route: true, agency: true, countOnOff: true, tripDetail: true };
+      return { boardingStop: true, alightingStop: true, route: true, agency: true, countOnOff: true, count: true, tripDetail: true };
   }
 }
 
@@ -239,6 +247,17 @@ function FieldConfigPanel() {
                 value={fieldConfig.countOffCol}
                 columns={columns}
                 onChange={v => update({ countOffCol: v })}
+              />
+            </div>
+          )}
+
+          {vis.count && (
+            <div className="field-config-group">
+              <ColumnSelect
+                label={t('ridership.countCol')}
+                value={fieldConfig.countCols[0] ?? null}
+                columns={columns}
+                onChange={v => update({ countCols: v ? [v] : [] })}
               />
             </div>
           )}
@@ -410,11 +429,8 @@ function MappingSection({ type, label, hasColumn }: { type: MappingType; label: 
   const fileRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
 
-  if (reconciliationMode === 'direct' || !hasColumn) return null;
-
-  const isUpload = reconciliationMode === 'upload-mapping';
-  const matched = rows.filter(r => r.gtfsIds.length > 0).length;
-
+  // NOTE: Hooks must run unconditionally on every render. これらの useCallback は
+  // 下の早期 return より前に置くこと（順番が変わると "Rendered more hooks..." で落ちる）。
   const handleFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) importMappingCsv(type, file);
@@ -438,6 +454,11 @@ function MappingSection({ type, label, hasColumn }: { type: MappingType; label: 
     a.click();
     URL.revokeObjectURL(url);
   }, [type, rows]);
+
+  if (reconciliationMode === 'direct' || !hasColumn) return null;
+
+  const isUpload = reconciliationMode === 'upload-mapping';
+  const matched = rows.filter(r => r.gtfsIds.length > 0).length;
 
   return (
     <div className="mapping-section">
@@ -482,7 +503,7 @@ function MappingSection({ type, label, hasColumn }: { type: MappingType; label: 
 }
 
 export function RidershipPanel() {
-  const { t } = useT();
+  const { t, tf } = useT();
   const phase = useAppStore(s => s.phase);
   const loadRidershipFile = useAppStore(s => s.loadRidershipFile);
   const loadExcelSheet = useAppStore(s => s.loadExcelSheet);
@@ -502,6 +523,19 @@ export function RidershipPanel() {
   const setMatchingRouteFilter = useAppStore(s => s.setMatchingRouteFilter);
   const matchingShowRidershipPerTrip = useAppStore(s => s.matchingShowRidershipPerTrip);
   const setMatchingShowRidershipPerTrip = useAppStore(s => s.setMatchingShowRidershipPerTrip);
+  const matchingJoinAllColumns = useAppStore(s => s.matchingJoinAllColumns);
+  const setMatchingJoinAllColumns = useAppStore(s => s.setMatchingJoinAllColumns);
+  const matchingOnlyMatched = useAppStore(s => s.matchingOnlyMatched);
+  const setMatchingOnlyMatched = useAppStore(s => s.setMatchingOnlyMatched);
+  const keyColumnDuplicates = useAppStore(s => s.keyColumnDuplicates);
+  const checkKeyColumnDuplicates = useAppStore(s => s.checkKeyColumnDuplicates);
+
+  const format = ridershipSummary?.format ?? 'unknown';
+  const isAggregate = format === 'station-aggregate' || format === 'route-aggregate';
+  const keyColForDup = format === 'station-aggregate' ? fieldConfig?.boardingStopCol : fieldConfig?.routeCol;
+  useEffect(() => {
+    checkKeyColumnDuplicates();
+  }, [checkKeyColumnDuplicates, format, keyColForDup]);
 
   const progress = useAppStore(s => s.progress);
   const [dragover, setDragover] = useState(false);
@@ -638,6 +672,39 @@ export function RidershipPanel() {
               {t('ridership.perTripToggle')}
             </label>
           </div>
+
+          {/* (C4) Aggregate-only options: join all columns + only-matched */}
+          {isAggregate && (
+            <div className="field" style={{ marginTop: 8 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                <input
+                  type="checkbox"
+                  checked={matchingJoinAllColumns}
+                  onChange={e => setMatchingJoinAllColumns(e.target.checked)}
+                />
+                {t('ridership.joinAllColumns')}
+              </label>
+              {keyColumnDuplicates && (
+                <div style={{ fontSize: 10, color: 'var(--color-warning)', marginTop: 4 }}>
+                  {tf('ridership.dupWarning', keyColumnDuplicates.column, keyColumnDuplicates.count)}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* (C5) Only-matched output toggle */}
+          {isAggregate && (
+            <div className="field" style={{ marginTop: 8 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                <input
+                  type="checkbox"
+                  checked={matchingOnlyMatched}
+                  onChange={e => setMatchingOnlyMatched(e.target.checked)}
+                />
+                {t('ridership.onlyMatched')}
+              </label>
+            </div>
+          )}
 
           {/* (D) Reconciliation */}
           <div className="field">
