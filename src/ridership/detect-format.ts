@@ -23,6 +23,11 @@ export function detectRidershipFormat(headers: string[]): RidershipFormat {
     return 'stop-trip-detail';
   }
 
+  // 英語ヘッダ版（stop-trip-detail）。`count` を持たないため route-aggregate 等とは競合しない。
+  if (set.has('boarding_count') && set.has('alighting_count') && (set.has('stop_name') || set.has('stop') || set.has('stop_id')) && set.has('trip_id')) {
+    return 'stop-trip-detail';
+  }
+
   return 'unknown';
 }
 
@@ -189,18 +194,20 @@ export function defaultFieldConfig(format: RidershipFormat, headers: string[]): 
       };
     case 'stop-trip-detail':
       return {
-        boardingStopCol: find('停留所名') ?? find('停留所') ?? find('停留所id'),
+        boardingStopCol: find('停留所名') ?? find('停留所') ?? find('停留所id')
+          ?? find('stop_name') ?? find('stop') ?? find('stop_id'),
         alightingStopCol: null,
         stopGtfsField: 'stop_name',
-        routeCol: find('路線名') ?? find('路線id'),
+        routeCol: find('路線名') ?? find('路線id')
+          ?? find('route_name') ?? find('route_long_name') ?? find('route_id'),
         routeGtfsField: 'route_long_name',
         agencyCol: null,
         agencyGtfsField: 'agency_name',
         countCols: [],
-        countOnCol: find('乗車人数'),
-        countOffCol: find('降車人数'),
-        tripIdCol: find('便id'),
-        passThroughCol: find('通過人数'),
+        countOnCol: find('乗車人数') ?? find('boarding_count'),
+        countOffCol: find('降車人数') ?? find('alighting_count'),
+        tripIdCol: find('便id') ?? find('trip_id'),
+        passThroughCol: find('通過人数') ?? find('pass_through_count') ?? find('onboard_count'),
         timeCol: timeColAuto,
         dateCol: dateColAuto,
       };
