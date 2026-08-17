@@ -34,7 +34,7 @@ export type ExportFormat = 'geojson' | 'csv' | 'xlsx';
 
 /** アニメーション対象レイヤー。座標 4 要素目に unix 秒が入っているもの。 */
 const ANIMATABLE_LAYERS: ReadonlySet<string> = new Set([
-  'animation', 'matching-animation', 'matching-ridership',
+  'animation', 'matching-animation', 'matching-solo-animation',
 ]);
 
 /** 生成済みレイヤーから unix 秒のレンジ (min, max) を抽出。 */
@@ -69,7 +69,7 @@ const ALL_LAYERS: LayerType[] = [
   'matching',
   'matching-stops', 'matching-lines', 'matching-segments',
   'matching-flow', 'matching-od',
-  'matching-trips', 'matching-animation', 'matching-ridership',
+  'matching-trips', 'matching-animation', 'matching-solo-animation',
 ];
 
 interface AppState {
@@ -105,7 +105,7 @@ interface AppState {
   agencyMapping: MappingRow[];
   gtfsCandidates: Record<MappingType, CandidateGroup[]>;
   joinStats: JoinStats | null;
-  /** matching-animation / matching-ridership 生成時の便割り当て統計と feed_info 整合性 */
+  /** matching-animation / matching-solo-animation 生成時の便割り当て統計と feed_info 整合性 */
   tripAssignmentStats: TripAssignmentStats | null;
   matchingOutputLayer: MatchingOutputLayer;
   matchingRouteFilterIds: string[];
@@ -123,7 +123,7 @@ interface AppState {
   is3D: boolean;
 
   // Time animation
-  /** Current time in unix seconds (for animation of trips / matching-animation / matching-ridership) */
+  /** Current time in unix seconds (for animation of trips / matching-animation / matching-solo-animation) */
   currentTime: number;
   /** Min/max unix seconds across active animatable layers */
   timeBounds: { min: number; max: number } | null;
@@ -1091,7 +1091,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       const fallbackDate = state.animationBaseDate || new Date().toISOString().slice(0, 10);
 
-      /** matching-animation / matching-ridership 共通: 便割り当て統計を計算し、UI / ログに反映 */
+      /** matching-animation / matching-solo-animation 共通: 便割り当て統計を計算し、UI / ログに反映 */
       async function recordTripAssignmentStats() {
         const stats = await queryTripAssignmentStats(db);
         set({ tripAssignmentStats: stats });
@@ -1123,16 +1123,16 @@ export const useAppStore = create<AppState>((set, get) => ({
         addLog('info', tf('log.features', 'matching-animation', results['matching-animation'].features.length));
       }
 
-      // Phase 3: matching-ridership（個票単位の軌跡）
-      if (layer === 'matching-ridership' && rFieldConfig) {
+      // Phase 3: matching-solo-animation（個票単位の軌跡）
+      if (layer === 'matching-solo-animation' && rFieldConfig) {
         // 前段で trip assignment が必要なので buildMatchingAnimationTable を先に走らせる
         await buildMatchingAnimationTable(db, rFieldConfig, state.reconciliationMode, fallbackDate);
         await recordTripAssignmentStats();
         await buildMatchingRidershipTable(db, rFieldConfig, fallbackDate);
         const rows = await queryMatchingRidership(db);
-        results['matching-ridership'] = buildMatchingRidershipFeatures(rows);
-        applyRouteFilter(results['matching-ridership']);
-        addLog('info', tf('log.features', 'matching-ridership', results['matching-ridership'].features.length));
+        results['matching-solo-animation'] = buildMatchingRidershipFeatures(rows);
+        applyRouteFilter(results['matching-solo-animation']);
+        addLog('info', tf('log.features', 'matching-solo-animation', results['matching-solo-animation'].features.length));
       }
 
       // 時刻アニメ用バウンズの算出

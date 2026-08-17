@@ -52,7 +52,7 @@ export function TimeBar() {
   const isAnimatable =
     displayedLayer === 'animation'
     || displayedLayer === 'matching-animation'
-    || displayedLayer === 'matching-ridership';
+    || displayedLayer === 'matching-solo-animation';
   const hasContent = displayedLayer in generatedLayers
     && generatedLayers[displayedLayer]!.features.length > 0;
 

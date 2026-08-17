@@ -1,7 +1,7 @@
 export type MatchingOutputLayer =
   | 'matching-stops' | 'matching-lines' | 'matching-segments'
   | 'matching-flow' | 'matching-od'
-  | 'matching-trips' | 'matching-animation' | 'matching-ridership';
+  | 'matching-trips' | 'matching-animation' | 'matching-solo-animation';
 
 export type LayerType =
   | 'stops' | 'lines' | 'animation'
@@ -261,7 +261,7 @@ export function getAvailableProperties(layer: LayerType): string[] {
       return [...MATCHING_TRIPS_PROPERTIES];
     case 'matching-animation':
       return [...MATCHING_ANIMATION_PROPERTIES];
-    case 'matching-ridership':
+    case 'matching-solo-animation':
       return [...MATCHING_RIDERSHIP_PROPERTIES];
     case 'matching':
       return [];

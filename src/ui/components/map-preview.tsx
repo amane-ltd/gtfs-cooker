@@ -34,7 +34,7 @@ const COLORS: Record<string, [number, number, number, number]> = {
   'matching-od':   [149, 165, 166, 100],
   'matching-trips':  [230, 126,  34, 230],  // オレンジ (Material Orange 600)
   'matching-animation': [233,  30,  99, 230],  // ピンク (Material Pink 500)
-  'matching-ridership': [241, 196,  15, 220],
+  'matching-solo-animation': [241, 196,  15, 220],
 };
 
 const OUTLINE_COLORS: Record<string, [number, number, number, number]> = {
@@ -125,7 +125,7 @@ const MATCHING_MAX_PX: Record<string, number> = {
   'matching-od': 10,
   'matching-trips': 10,
   'matching-animation': 10,
-  'matching-ridership': 10,
+  'matching-solo-animation': 10,
 };
 
 /** feature 群から値の最大を求める（0 以下は無視） */
@@ -169,12 +169,12 @@ function buildDeckLayers(
     const color = COLORS[key] ?? [100, 100, 100, 200];
 
     // ── Animated layers: TripsLayer (時刻つき LineString) ──
-    const animatable = key === 'animation' || key === 'matching-animation' || key === 'matching-ridership';
+    const animatable = key === 'animation' || key === 'matching-animation' || key === 'matching-solo-animation';
     if (animatable && hasTimestamps(fc) && timeBounds) {
       // matching 系は値（onboard / passenger_count）に比例し、最大値が固定ピクセル幅になるよう正規化
       const animVal = (f: Feature) =>
         key === 'matching-animation' ? Number(f.properties?.onboard ?? 0)
-        : key === 'matching-ridership' ? Number(f.properties?.passenger_count ?? 0)
+        : key === 'matching-solo-animation' ? Number(f.properties?.passenger_count ?? 0)
         : 0;
       const animMax = maxOfFeatures(fc.features, animVal);
       const animMaxPx = MATCHING_MAX_PX[key] ?? 10;
@@ -434,13 +434,13 @@ function buildDeckLayers(
         onHover: tripHoverClick(onHover),
         onClick: tripHoverClick(onClick),
       }));
-    } else if (key === 'matching-ridership') {
+    } else if (key === 'matching-solo-animation') {
       // 個票単位の軌跡。Kepler.gl Trip 形式の 4 要素座標だが、現状の MapLibre 描画では
       // 単純な PathLayer として描く（将来的に TripsLayer による時刻アニメーションに拡張可能）。
       const pathData = expandToPaths(fc.features);
       const rideVal = (f: Feature) => Number(f.properties?.passenger_count ?? 0);
       const maxRide = maxOfFeatures(fc.features, rideVal);
-      const rideMaxPx = MATCHING_MAX_PX['matching-ridership']!;
+      const rideMaxPx = MATCHING_MAX_PX['matching-solo-animation']!;
       const ridershipHoverClick = (handler: (info: PickingInfo) => void) => (info: PickingInfo) => {
         if (info.object) {
           const datum = info.object as PathDatum;

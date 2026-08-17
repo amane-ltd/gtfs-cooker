@@ -1393,7 +1393,7 @@ export async function queryMatchingAnimationSegments(db: AsyncDuckDB): Promise<M
 }
 
 // ───────────────────────────────────────────────────────────
-// Phase 3: matching-ridership (per-record trajectory)
+// Phase 3: matching-solo-animation (per-record trajectory)
 // ───────────────────────────────────────────────────────────
 
 /**
