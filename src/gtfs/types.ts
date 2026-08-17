@@ -148,6 +148,10 @@ const RIDERSHIP_PER_TRIP_PROPERTIES = [
 
 export { RIDERSHIP_HOURLY_PROPERTIES, RIDERSHIP_PER_TRIP_PROPERTIES };
 
+// matching-segments 用: 乗車数（onboard）の時間帯別・便あたり列（ridership_* と同じ並びで prefix だけ変更）
+export const ONBOARD_HOURLY_PROPERTIES: string[] = RIDERSHIP_HOURLY_PROPERTIES.map(s => s.replace('ridership_', 'onboard_'));
+export const ONBOARD_PER_TRIP_PROPERTIES: string[] = RIDERSHIP_PER_TRIP_PROPERTIES.map(s => s.replace('ridership_', 'onboard_'));
+
 export const MATCHING_STOPS_PROPERTIES = [
   'stop_id', 'stop_name', 'ridership_on', 'ridership_off',
   ...RIDERSHIP_HOURLY_PROPERTIES,
@@ -163,10 +167,10 @@ export const MATCHING_LINES_PROPERTIES = [
 export const MATCHING_SEGMENTS_PROPERTIES = [
   'from_stop_id', 'from_stop_name', 'from_stop_lat', 'from_stop_lon',
   'to_stop_id', 'to_stop_name', 'to_stop_lat', 'to_stop_lon',
-  'ridership',
-  ...RIDERSHIP_HOURLY_PROPERTIES,
-  ...RIDERSHIP_PER_TRIP_PROPERTIES,
-] as const;
+  'onboard',
+  ...ONBOARD_HOURLY_PROPERTIES,
+  ...ONBOARD_PER_TRIP_PROPERTIES,
+];
 
 export const MATCHING_FLOW_PROPERTIES = [
   'boarding_stop_id', 'boarding_stop_name',

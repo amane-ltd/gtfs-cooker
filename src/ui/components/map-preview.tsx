@@ -331,7 +331,7 @@ function buildDeckLayers(
       const pathData = expandToPaths(fc.features);
       const lineVal = (f: Feature) => key === 'matching-lines'
         ? Number(f.properties?.ridership_count ?? 0)
-        : Number(f.properties?.ridership ?? 0);
+        : Number(f.properties?.onboard ?? 0);
       const maxLine = maxOfFeatures(fc.features, lineVal);
       const maxPx = MATCHING_MAX_PX[key]!;
       const matchPathHoverClick = (handler: (info: PickingInfo) => void) => (info: PickingInfo) => {

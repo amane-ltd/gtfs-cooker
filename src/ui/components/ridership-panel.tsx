@@ -6,6 +6,7 @@ import type { MappingType, MappingRow, RidershipFormat, RidershipFieldConfig, St
 import type { MatchingOutputLayer } from '../../gtfs/types';
 
 const SELECTABLE_FORMATS: { value: RidershipFormat; key: string }[] = [
+  { value: 'commons-detail', key: 'ridership.fmt.commons-detail' },
   { value: 'detail', key: 'ridership.fmt.detail' },
   { value: 'stop-trip-detail', key: 'ridership.fmt.stop-trip-detail' },
   { value: 'od-aggregate', key: 'ridership.fmt.od-aggregate' },
@@ -245,6 +246,11 @@ function FieldConfigBody() {
 
   const vis = getFieldVisibility(format);
 
+  // 必須列にはアスタリスクを付ける（docs/user matching.md「フォーマット別の列設定」準拠）
+  const routeRequired = format === 'stop-trip-detail' || format === 'route-aggregate';
+  const timeRequired = format === 'stop-trip-detail';
+  const star = (label: string, required: boolean) => (required ? `${label} *` : label);
+
   const update = (patch: Partial<RidershipFieldConfig>) => {
     setFieldConfig({ ...fieldConfig, ...patch });
   };
@@ -256,7 +262,7 @@ function FieldConfigBody() {
             <div className="field-config-group">
               {vis.boardingStop && (
                 <ColumnSelect
-                  label={vis.alightingStop ? t('ridership.boardingStopCol') : t('ridership.stopCol')}
+                  label={star(vis.alightingStop ? t('ridership.boardingStopCol') : t('ridership.stopCol'), true)}
                   value={fieldConfig.boardingStopCol}
                   columns={columns}
                   onChange={v => update({ boardingStopCol: v })}
@@ -264,7 +270,7 @@ function FieldConfigBody() {
               )}
               {vis.alightingStop && (
                 <ColumnSelect
-                  label={t('ridership.alightingStopCol')}
+                  label={star(t('ridership.alightingStopCol'), true)}
                   value={fieldConfig.alightingStopCol}
                   columns={columns}
                   onChange={v => update({ alightingStopCol: v })}
@@ -285,7 +291,7 @@ function FieldConfigBody() {
           {vis.route && (
             <div className="field-config-group">
               <ColumnSelect
-                label={t('ridership.routeCol')}
+                label={star(t('ridership.routeCol'), routeRequired)}
                 value={fieldConfig.routeCol}
                 columns={columns}
                 onChange={v => update({ routeCol: v })}
@@ -326,13 +332,13 @@ function FieldConfigBody() {
           {vis.countOnOff && (
             <div className="field-config-group">
               <ColumnSelect
-                label={t('ridership.countOnCol')}
+                label={star(t('ridership.countOnCol'), true)}
                 value={fieldConfig.countOnCol}
                 columns={columns}
                 onChange={v => update({ countOnCol: v })}
               />
               <ColumnSelect
-                label={t('ridership.countOffCol')}
+                label={star(t('ridership.countOffCol'), true)}
                 value={fieldConfig.countOffCol}
                 columns={columns}
                 onChange={v => update({ countOffCol: v })}
@@ -343,7 +349,7 @@ function FieldConfigBody() {
           {vis.count && (
             <div className="field-config-group">
               <ColumnSelect
-                label={t('ridership.countCol')}
+                label={star(t('ridership.countCol'), true)}
                 value={fieldConfig.countCols[0] ?? null}
                 columns={columns}
                 onChange={v => update({ countCols: v ? [v] : [] })}
@@ -354,7 +360,7 @@ function FieldConfigBody() {
           {vis.tripDetail && (
             <div className="field-config-group">
               <ColumnSelect
-                label={t('ridership.tripIdCol')}
+                label={star(t('ridership.tripIdCol'), true)}
                 value={fieldConfig.tripIdCol}
                 columns={columns}
                 onChange={v => update({ tripIdCol: v })}
@@ -376,9 +382,7 @@ function FieldConfigBody() {
               onChange={v => update({ dateCol: v })}
             />
             <ColumnSelect
-              label={format === 'stop-trip-detail'
-                ? `${t('ridership.timeCol')} *`
-                : t('ridership.timeCol')}
+              label={star(t('ridership.timeCol'), timeRequired)}
               value={fieldConfig.timeCol}
               columns={columns}
               onChange={v => update({ timeCol: v })}
@@ -702,9 +706,6 @@ export function RidershipPanel() {
               >
                 {ridershipSummary.format === 'unknown' && (
                   <option value="unknown" disabled>—</option>
-                )}
-                {ridershipSummary.format === 'commons-detail' && (
-                  <option value="commons-detail">{t('ridership.fmt.commons-detail' as never)}</option>
                 )}
                 {SELECTABLE_FORMATS.map(f => (
                   <option key={f.value} value={f.value}>{t(f.key as never)}</option>

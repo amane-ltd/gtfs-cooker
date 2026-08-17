@@ -1063,6 +1063,9 @@ async function executeMatchingTripsForTripDetail(
 
   const conn = await db.connect();
   try {
+    // stop-trip-detail は OD 専用の割り当てテーブルを使わない。
+    // 古い OD 実行の残骸が除外統計を汚染しないよう破棄しておく。
+    await conn.query(`DROP TABLE IF EXISTS ridership_trip_assignment`);
     const stopCol = esc(config.boardingStopCol);
     const tripCol = esc(config.tripIdCol);
     const passExpr = config.passThroughCol

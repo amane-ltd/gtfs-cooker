@@ -5,6 +5,8 @@ const RIDERSHIP_TABLES = [
   'ridership_by_stop', 'ridership_by_route', 'ridership_by_segment',
   'ridership_by_flow', 'ridership_arc',
   'ridership_allcols_by_stop', 'ridership_allcols_by_route',
+  // matching-trips / -animation / -ridership の中間テーブル（古い OD 割り当てが残ると統計が汚染される）
+  'ridership_trip_assignment', 'ridership_by_trip_segment', 'ridership_trajectories',
 ] as const;
 
 export async function dropRidershipTables(db: AsyncDuckDB): Promise<void> {

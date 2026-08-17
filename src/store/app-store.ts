@@ -560,6 +560,26 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       }
 
+      // matching-segments 用: onboard_* キーの時間帯別 hourly から onboard_per_trip* を付与
+      function attachOnboardRatioCols(
+        target: Record<string, unknown>,
+        onboard: number | undefined,
+        hourly: Record<string, number>,
+      ): void {
+        if (!showRatio) return;
+        const tripTotal = Number(target['trip_weekday'] ?? 0) + Number(target['trip_holiday'] ?? 0);
+        target['onboard_per_trip'] = onboard !== undefined && tripTotal > 0
+          ? round3(onboard / tripTotal)
+          : null;
+        for (const k of HOUR_KEYS) {
+          const r = hourly[`onboard_${k}`];
+          const t = Number(target[`trip_${k}`] ?? 0);
+          target[`onboard_per_trip_${k}`] = r !== undefined && t > 0
+            ? round3(r / t)
+            : null;
+        }
+      }
+
       // 「すべてのカラムを結合する」用: allcols テーブルを読み、キー値→CSV 全列 の Map を返す。
       // 内部キー列（__gtfs_stop_val など）は除去する。テーブルが無ければ null。
       async function loadAllCols(
@@ -692,8 +712,13 @@ export const useAppStore = create<AppState>((set, get) => ({
             const key = `${feat.properties?.[matchProp]}->${feat.properties?.[matchProp2]}`;
             const entry = map.get(key);
             if (entry !== undefined) {
-              const props = { ...feat.properties, ridership: entry.riders, ...entry.hourly };
-              attachRatioCols(props, entry.riders, entry.hourly);
+              // ridership_* の時間帯別キーを onboard_* に付け替える
+              const hourlyOnboard: Record<string, number> = {};
+              for (const [hk, hv] of Object.entries(entry.hourly)) {
+                hourlyOnboard[hk.replace('ridership_', 'onboard_')] = hv;
+              }
+              const props = { ...feat.properties, onboard: entry.riders, ...hourlyOnboard };
+              attachOnboardRatioCols(props, entry.riders, hourlyOnboard);
               feat.properties = props;
               matched.push(feat);
             }
