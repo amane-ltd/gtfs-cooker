@@ -523,6 +523,19 @@ export const useAppStore = create<AppState>((set, get) => ({
         );
       }
 
+      // segment / matching-segment を shape.txt に追従させるための shape 座標マップ
+      async function getSegmentShapes(): Promise<Map<string, import('../geojson/segments').ShapeGeometry>> {
+        const map = new Map<string, import('../geojson/segments').ShapeGeometry>();
+        if (!(await tableExists(db, 'shapes'))) return map;
+        const pts = await queryShapePoints(db);
+        for (const p of pts) {
+          let e = map.get(p.shape_id);
+          if (!e) { e = { coords: [] }; map.set(p.shape_id, e); }
+          e.coords.push([p.shape_pt_lon, p.shape_pt_lat]);
+        }
+        return map;
+      }
+
       const hasRidershipStops = await tableExists(db, 'ridership_by_stop');
       const hasRidershipRoutes = await tableExists(db, 'ridership_by_route');
       const hasRidershipSegments = await tableExists(db, 'ridership_by_segment');
@@ -829,7 +842,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       if (layer === 'segments') {
         const segRows = await querySegments(db, state.showTripTimes);
-        results.segments = buildSegmentsGeoJSON(segRows, props, coordinatePrecision);
+        results.segments = buildSegmentsGeoJSON(segRows, await getSegmentShapes(), props, coordinatePrecision);
         await enrichSegmentsWithRidership(results.segments);
         addLog('info', tf('log.features', 'segments', results.segments.features.length));
       }
@@ -884,7 +897,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       if (layer === 'matching-segments') {
         const segRows = await querySegments(db, state.showTripTimes);
-        const segFC = buildSegmentsGeoJSON(segRows, [...getAvailableProperties('segments')], coordinatePrecision);
+        const segFC = buildSegmentsGeoJSON(segRows, await getSegmentShapes(), [...getAvailableProperties('segments')], coordinatePrecision);
         await enrichSegmentsWithRidership(segFC);
         applyRouteFilter(segFC);
         results['matching-segments'] = segFC;

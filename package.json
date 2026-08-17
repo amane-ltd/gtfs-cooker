@@ -22,6 +22,8 @@
     "@turf/concave": "^7.3.5",
     "@turf/convex": "^7.3.5",
     "@turf/helpers": "^7.3.5",
+    "@turf/line-slice": "^7.4.0",
+    "@turf/nearest-point-on-line": "^7.4.0",
     "@turf/simplify": "^7.3.5",
     "@turf/union": "^7.3.5",
     "jszip": "^3.10.1",

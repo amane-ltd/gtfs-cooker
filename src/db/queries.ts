@@ -114,6 +114,8 @@ interface SegmentRow {
   to_stop_lon: number;
   route_id: string;
   route_short_name: string | null;
+  // 区間に対応する代表 shape。shape 追従描画（投影で区間を切り出す）に使う
+  shape_id: string | null;
   trip_weekday: number;
   trip_holiday: number;
   // showTripTimes=true のときは "MM(trip_id),..." 文字列、それ以外は便数(int)
@@ -598,6 +600,7 @@ export async function querySegments(db: AsyncDuckDB, showTripTimes = false): Pro
           CAST(st.stop_id AS VARCHAR) AS stop_id,
           CAST(st.stop_sequence AS INTEGER) AS stop_sequence,
           CAST(t.trip_id AS VARCHAR) AS trip_id,
+          CAST(t.shape_id AS VARCHAR) AS shape_id,
           ${hourExpr} AS hour,
           CAST(${timeCol} AS VARCHAR) AS dep_time,
           ${hasCalendar ? 'c.monday, c.sunday,' : ''}
@@ -615,6 +618,8 @@ export async function querySegments(db: AsyncDuckDB, showTripTimes = false): Pro
           route_short_name,
           stop_id AS from_stop_id,
           next_stop_id AS to_stop_id,
+          -- 代表 shape（最小 trip_id の行を採用）。投影で区間を切り出すのに使う
+          arg_min(shape_id, trip_id) AS shape_id,
           ${weekdayExpr} AS trip_weekday,
           ${holidayExpr} AS trip_holiday,
           ${hourlyLines.join(',\n          ')},
@@ -637,6 +642,7 @@ export async function querySegments(db: AsyncDuckDB, showTripTimes = false): Pro
         CAST(s2.stop_lon AS DOUBLE) AS to_stop_lon,
         seg.route_id,
         seg.route_short_name,
+        seg.shape_id,
         seg.trip_weekday,
         seg.trip_holiday,
         ${Array.from({ length: 24 }, (_, i) => `seg.trip_${String(i + 4).padStart(2, '0')}`).join(', ')},
