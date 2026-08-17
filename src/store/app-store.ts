@@ -108,7 +108,7 @@ interface AppState {
   /** matching-trips / matching-ridership 生成時の便割り当て統計と feed_info 整合性 */
   tripAssignmentStats: TripAssignmentStats | null;
   matchingOutputLayer: MatchingOutputLayer;
-  matchingRouteFilter: string;
+  matchingRouteFilterIds: string[];
   matchingShowRidershipPerTrip: boolean;
   /** true のとき stops/lines/segments の時刻帯別 trip 列を「分(便ID)」の便時刻表示にする */
   showTripTimes: boolean;
@@ -154,7 +154,7 @@ interface AppState {
   setLinesFilterValues: (v: string[]) => void;
   setLinesFilterAggregate: (v: boolean) => void;
   setMatchingOutputLayer: (layer: MatchingOutputLayer) => void;
-  setMatchingRouteFilter: (filter: string) => void;
+  setMatchingRouteFilterIds: (ids: string[]) => void;
   setMatchingShowRidershipPerTrip: (v: boolean) => void;
   setShowTripTimes: (v: boolean) => void;
   setMatchingJoinAllColumns: (v: boolean) => void;
@@ -226,7 +226,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   joinStats: null,
   tripAssignmentStats: null,
   matchingOutputLayer: 'matching-stops' as MatchingOutputLayer,
-  matchingRouteFilter: '',
+  matchingRouteFilterIds: [],
   matchingShowRidershipPerTrip: false,
   showTripTimes: false,
   matchingJoinAllColumns: false,
@@ -247,7 +247,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setIs3D: (v) => set({ is3D: v }),
   setMatchingOutputLayer: (layer) => set({ matchingOutputLayer: layer }),
-  setMatchingRouteFilter: (filter) => set({ matchingRouteFilter: filter }),
+  setMatchingRouteFilterIds: (ids) => set({ matchingRouteFilterIds: ids }),
   setMatchingShowRidershipPerTrip: (v) => set({ matchingShowRidershipPerTrip: v }),
   setShowTripTimes: (v) => set({ showTripTimes: v }),
   setMatchingJoinAllColumns: (v) => set({ matchingJoinAllColumns: v }),
@@ -834,33 +834,24 @@ export const useAppStore = create<AppState>((set, get) => ({
         addLog('info', tf('log.features', 'segments', results.segments.features.length));
       }
 
-      const routeFilterRaw = state.matchingRouteFilter.trim();
-      function applyRouteFilter(fc: FeatureCollection, ...routeProps: string[]): FeatureCollection {
-        if (!routeFilterRaw) return fc;
-        const needle = routeFilterRaw.toLowerCase();
-        fc.features = fc.features.filter(f => {
-          for (const key of routeProps) {
-            const v = f.properties?.[key];
-            if (v != null && String(v).toLowerCase().includes(needle)) return true;
-          }
-          return false;
-        });
+      // 選択された route_id の集合で絞り込む（空なら全件）
+      const allowedRouteIds = new Set(state.matchingRouteFilterIds.map(String));
+      function applyRouteFilter(fc: FeatureCollection, routeIdProp = 'route_id'): FeatureCollection {
+        if (allowedRouteIds.size === 0) return fc;
+        fc.features = fc.features.filter(f => allowedRouteIds.has(String(f.properties?.[routeIdProp] ?? '')));
         return fc;
       }
 
       async function applyRouteFilterByStop(fc: FeatureCollection): Promise<FeatureCollection> {
-        if (!routeFilterRaw) return fc;
+        if (allowedRouteIds.size === 0) return fc;
         const conn2 = await db.connect();
         try {
-          const needle = routeFilterRaw.replace(/'/g, "''").toLowerCase();
+          const inList = [...allowedRouteIds].map(id => `'${id.replace(/'/g, "''")}'`).join(', ');
           const res = await conn2.query(`
             SELECT DISTINCT CAST(st.stop_id AS VARCHAR) AS stop_id
             FROM stop_times st
             JOIN trips t ON CAST(st.trip_id AS VARCHAR) = CAST(t.trip_id AS VARCHAR)
-            LEFT JOIN routes r ON CAST(t.route_id AS VARCHAR) = CAST(r.route_id AS VARCHAR)
-            WHERE LOWER(CAST(t.route_id AS VARCHAR)) LIKE '%${needle}%'
-               OR LOWER(COALESCE(r.route_short_name, '')) LIKE '%${needle}%'
-               OR LOWER(COALESCE(r.route_long_name, '')) LIKE '%${needle}%'
+            WHERE CAST(t.route_id AS VARCHAR) IN (${inList})
           `);
           const allowedStops = new Set<string>();
           for (const row of res.toArray()) {
@@ -886,7 +877,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (layer === 'matching-lines') {
         const linesFC = await getLinesFC();
         await enrichRoutesWithRidership(linesFC);
-        applyRouteFilter(linesFC, 'route_id', 'route_short_name', 'route_long_name');
+        applyRouteFilter(linesFC);
         results['matching-lines'] = linesFC;
         addLog('info', tf('log.features', 'matching-lines', linesFC.features.length));
       }
@@ -895,7 +886,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         const segRows = await querySegments(db, state.showTripTimes);
         const segFC = buildSegmentsGeoJSON(segRows, [...getAvailableProperties('segments')], coordinatePrecision);
         await enrichSegmentsWithRidership(segFC);
-        applyRouteFilter(segFC, 'route_id', 'route_short_name');
+        applyRouteFilter(segFC);
         results['matching-segments'] = segFC;
         addLog('info', tf('log.features', 'matching-segments', segFC.features.length));
       }
@@ -1048,10 +1039,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         await recordTripAssignmentStats();
         const rows = await queryMatchingTripSegments(db);
         results['matching-trips'] = buildMatchingTripsFeatures(rows);
-        // route filter
-        if (state.matchingRouteFilter.trim()) {
-          applyRouteFilter(results['matching-trips'], 'route_id', 'route_short_name', 'route_long_name');
-        }
+        applyRouteFilter(results['matching-trips']);
         addLog('info', tf('log.features', 'matching-trips', results['matching-trips'].features.length));
       }
 
@@ -1063,9 +1051,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         await buildMatchingRidershipTable(db, rFieldConfig, fallbackDate);
         const rows = await queryMatchingRidership(db);
         results['matching-ridership'] = buildMatchingRidershipFeatures(rows);
-        if (state.matchingRouteFilter.trim()) {
-          applyRouteFilter(results['matching-ridership'], 'route_id', 'route_short_name');
-        }
+        applyRouteFilter(results['matching-ridership']);
         addLog('info', tf('log.features', 'matching-ridership', results['matching-ridership'].features.length));
       }
 
@@ -1431,7 +1417,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       agencyMapping: [],
       gtfsCandidates: { stop: [], route: [], agency: [] },
       matchingOutputLayer: 'matching-stops' as MatchingOutputLayer,
-      matchingRouteFilter: '',
+      matchingRouteFilterIds: [],
       matchingShowRidershipPerTrip: false,
       showTripTimes: false,
       matchingJoinAllColumns: false,

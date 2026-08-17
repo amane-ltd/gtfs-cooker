@@ -162,6 +162,75 @@ function CollapsibleBox({ title, defaultOpen = false, children }: {
   );
 }
 
+/** 路線を複数選択で絞り込むチェックボックス・プルダウン。
+ *  項目表記: route_id(route_short_name)。short が空なら route_id(route_long_name)。 */
+function RouteMultiSelect() {
+  const { t, tf } = useT();
+  const phase = useAppStore(s => s.phase);
+  const routeInfoList = useAppStore(s => s.routeInfoList);
+  const loadRouteStops = useAppStore(s => s.loadRouteStops);
+  const selected = useAppStore(s => s.matchingRouteFilterIds);
+  const setSelected = useAppStore(s => s.setMatchingRouteFilterIds);
+  const [open, setOpen] = useState(false);
+
+  // matching レイヤーでも路線一覧が必要なので、未取得なら読み込む
+  useEffect(() => {
+    if ((phase === 'loaded' || phase === 'done') && routeInfoList.length === 0) loadRouteStops();
+  }, [phase, routeInfoList.length, loadRouteStops]);
+
+  const routeLabel = (r: { route_id: string; route_short_name: string | null; route_long_name: string | null }) => {
+    const sub = r.route_short_name?.trim() ? r.route_short_name : (r.route_long_name?.trim() || '');
+    return sub ? `${r.route_id}(${sub})` : r.route_id;
+  };
+
+  const selectedSet = new Set(selected);
+  const toggle = (id: string) => {
+    const next = new Set(selectedSet);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelected([...next]);
+  };
+
+  const summary = selected.length === 0
+    ? t('ridership.routeFilterAll')
+    : tf('ridership.routeFilterCount', selected.length);
+
+  return (
+    <div className="field" style={{ marginTop: 8 }}>
+      <span className="field-label">{t('ridership.routeFilter')}</span>
+      <div className="route-multiselect">
+        <button type="button" className="route-multiselect-toggle" onClick={() => setOpen(o => !o)}>
+          <span className="route-multiselect-summary">{summary}</span>
+          <span>{open ? '▲' : '▼'}</span>
+        </button>
+        {open && (
+          <div className="route-multiselect-menu">
+            {selected.length > 0 && (
+              <div className="route-multiselect-actions">
+                <button type="button" onClick={() => setSelected([])}>
+                  {t('ridership.routeFilterClear')}
+                </button>
+              </div>
+            )}
+            {routeInfoList.length === 0 && (
+              <div className="route-multiselect-empty">—</div>
+            )}
+            {routeInfoList.map(r => (
+              <label key={r.route_id} className="route-multiselect-item">
+                <input
+                  type="checkbox"
+                  checked={selectedSet.has(r.route_id)}
+                  onChange={() => toggle(r.route_id)}
+                />
+                <span>{routeLabel(r)}</span>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** 列設定の中身（3-1 ボックス内に直接描画。独自の折りたたみは持たない）。 */
 function FieldConfigBody() {
   const { t } = useT();
@@ -535,8 +604,6 @@ export function RidershipPanel() {
   const tripAssignmentStats = useAppStore(s => s.tripAssignmentStats);
   const matchingOutputLayer = useAppStore(s => s.matchingOutputLayer);
   const setMatchingOutputLayer = useAppStore(s => s.setMatchingOutputLayer);
-  const matchingRouteFilter = useAppStore(s => s.matchingRouteFilter);
-  const setMatchingRouteFilter = useAppStore(s => s.setMatchingRouteFilter);
   const matchingShowRidershipPerTrip = useAppStore(s => s.matchingShowRidershipPerTrip);
   const setMatchingShowRidershipPerTrip = useAppStore(s => s.setMatchingShowRidershipPerTrip);
   const showTripTimes = useAppStore(s => s.showTripTimes);
@@ -694,16 +761,8 @@ export function RidershipPanel() {
               </div>
             )}
 
-            {/* Route filter */}
-            <div className="field" style={{ marginTop: 8 }}>
-              <span className="field-label">{t('ridership.routeFilter')}</span>
-              <input
-                type="text"
-                value={matchingRouteFilter}
-                onChange={e => setMatchingRouteFilter(e.target.value)}
-                placeholder={t('layer.routePlaceholder')}
-              />
-            </div>
+            {/* Route filter（複数選択チェックボックス） */}
+            <RouteMultiSelect />
 
             {/* Ridership per trip toggle */}
             <div className="field" style={{ marginTop: 8 }}>
