@@ -790,6 +790,39 @@ input[type='radio'] {
   border-radius: 2px;
 }
 
+/* 3-x の折りたたみボックス（四角で囲む + ▼/▶ プルダウン） */
+.ridership-section {
+  margin-top: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface-alt);
+}
+
+.ridership-section-header {
+  padding: 7px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text);
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.2s ease;
+}
+
+.ridership-section-header:hover {
+  color: var(--color-text-strong);
+}
+
+.ridership-section-body {
+  padding: 4px 9px 9px;
+}
+
+.field-config-heading {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  margin: 4px 0 2px;
+}
+
 .mapping-section-header {
   padding: 6px 8px;
   font-size: 10px;

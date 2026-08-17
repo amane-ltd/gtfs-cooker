@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useAppStore } from '../../store/app-store';
 import { useT } from '../hooks/use-t';
 import { ProgressBar } from './progress-bar';
@@ -27,6 +27,11 @@ const MATCHING_SUB_LAYERS: { id: MatchingOutputLayer; label: string; descKey: Ma
   { id: 'matching-trips', label: 'matching-trips', descKey: 'layer.matching-trips' },
   { id: 'matching-ridership', label: 'matching-ridership', descKey: 'layer.matching-ridership' },
 ];
+
+// 時刻帯別 trip 列を持つサブレイヤー（「便時刻表示」トグルの対象）
+const TRIP_COLUMN_SUBLAYERS = new Set<MatchingOutputLayer>([
+  'matching-stops', 'matching-lines', 'matching-segments',
+]);
 
 function getAvailableMatchingLayers(fieldConfig: RidershipFieldConfig | null): Set<MatchingOutputLayer> {
   const available = new Set<MatchingOutputLayer>();
@@ -140,13 +145,30 @@ function getFieldVisibility(format: RidershipFormat): FieldVisibility {
   }
 }
 
-function FieldConfigPanel() {
+/** 折りたたみ可能なボックス（四角で囲む + ▼/▶ プルダウン）。 */
+function CollapsibleBox({ title, defaultOpen = false, children }: {
+  title: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="ridership-section">
+      <div className="ridership-section-header" onClick={() => setOpen(!open)}>
+        <span>{open ? '▼' : '▶'} {title}</span>
+      </div>
+      {open && <div className="ridership-section-body">{children}</div>}
+    </div>
+  );
+}
+
+/** 列設定の中身（3-1 ボックス内に直接描画。独自の折りたたみは持たない）。 */
+function FieldConfigBody() {
   const { t } = useT();
   const columns = useAppStore(s => s.ridershipColumns);
   const fieldConfig = useAppStore(s => s.fieldConfig);
   const setFieldConfig = useAppStore(s => s.setFieldConfig);
   const format = useAppStore(s => s.ridershipSummary?.format ?? 'unknown');
-  const [open, setOpen] = useState(false);
 
   if (!fieldConfig) return null;
 
@@ -157,12 +179,8 @@ function FieldConfigPanel() {
   };
 
   return (
-    <div className="mapping-section">
-      <div className="mapping-section-header" onClick={() => setOpen(!open)}>
-        <span>{open ? '▼' : '▶'} {t('ridership.fieldConfig')}</span>
-      </div>
-      {open && (
-        <div className="mapping-section-body">
+    <>
+      <div className="field-config-heading">{t('ridership.fieldConfig')}</div>
           {(vis.boardingStop || vis.alightingStop) && (
             <div className="field-config-group">
               {vis.boardingStop && (
@@ -295,9 +313,7 @@ function FieldConfigPanel() {
               onChange={v => update({ timeCol: v })}
             />
           </div>
-        </div>
-      )}
-    </div>
+    </>
   );
 }
 
@@ -523,6 +539,8 @@ export function RidershipPanel() {
   const setMatchingRouteFilter = useAppStore(s => s.setMatchingRouteFilter);
   const matchingShowRidershipPerTrip = useAppStore(s => s.matchingShowRidershipPerTrip);
   const setMatchingShowRidershipPerTrip = useAppStore(s => s.setMatchingShowRidershipPerTrip);
+  const showTripTimes = useAppStore(s => s.showTripTimes);
+  const setShowTripTimes = useAppStore(s => s.setShowTripTimes);
   const matchingJoinAllColumns = useAppStore(s => s.matchingJoinAllColumns);
   const setMatchingJoinAllColumns = useAppStore(s => s.setMatchingJoinAllColumns);
   const matchingOnlyMatched = useAppStore(s => s.matchingOnlyMatched);
@@ -605,131 +623,133 @@ export function RidershipPanel() {
 
       {ridershipSummary && (
         <>
-          {/* (B) Format + field config */}
-          <div className="field" style={{ marginBottom: 8 }}>
-            <span className="field-label">{t('ridership.format')}</span>
-            <select
-              className="layer-select"
-              value={ridershipSummary.format}
-              onChange={e => setRidershipFormat(e.target.value as RidershipFormat)}
-            >
-              {ridershipSummary.format === 'unknown' && (
-                <option value="unknown" disabled>—</option>
-              )}
-              {ridershipSummary.format === 'commons-detail' && (
-                <option value="commons-detail">{t('ridership.fmt.commons-detail' as never)}</option>
-              )}
-              {SELECTABLE_FORMATS.map(f => (
-                <option key={f.value} value={f.value}>{t(f.key as never)}</option>
-              ))}
-            </select>
-            <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
-              {ridershipSummary.rowCount.toLocaleString()} rows
-            </span>
-          </div>
-
-          <FieldConfigPanel />
-
-          {/* (C) Sub-layer selection */}
-          {availableMatching.size > 0 && (
-            <div className="field" style={{ marginTop: 8 }}>
-              <span className="field-label">{t('ridership.subLayer')}</span>
+          {/* (3-1) Format + field config — 既定で開く */}
+          <CollapsibleBox title={`3-1 ${t('ridership.format')}`} defaultOpen>
+            <div className="field" style={{ marginBottom: 8 }}>
               <select
                 className="layer-select"
-                value={matchingOutputLayer}
-                onChange={e => setMatchingOutputLayer(e.target.value as MatchingOutputLayer)}
+                value={ridershipSummary.format}
+                onChange={e => setRidershipFormat(e.target.value as RidershipFormat)}
               >
-                {MATCHING_SUB_LAYERS
-                  .filter(sub => availableMatching.has(sub.id))
-                  .map(sub => (
-                    <option key={sub.id} value={sub.id}>
-                      {sub.label} — {t(sub.descKey)}
-                    </option>
-                  ))}
+                {ridershipSummary.format === 'unknown' && (
+                  <option value="unknown" disabled>—</option>
+                )}
+                {ridershipSummary.format === 'commons-detail' && (
+                  <option value="commons-detail">{t('ridership.fmt.commons-detail' as never)}</option>
+                )}
+                {SELECTABLE_FORMATS.map(f => (
+                  <option key={f.value} value={f.value}>{t(f.key as never)}</option>
+                ))}
+              </select>
+              <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
+                {ridershipSummary.rowCount.toLocaleString()} rows
+              </span>
+            </div>
+            <FieldConfigBody />
+          </CollapsibleBox>
+
+          {/* (3-2) Reconciliation mode — 既定で開く */}
+          <CollapsibleBox title={`3-2 ${t('ridership.mode')}`} defaultOpen>
+            <div className="field">
+              <select
+                className="layer-select"
+                value={reconciliationMode}
+                onChange={e => setReconciliationMode(e.target.value as 'direct' | 'auto-match' | 'upload-mapping')}
+              >
+                <option value="direct">{t('ridership.modeDirect')}</option>
+                <option value="auto-match">{t('ridership.modeAuto')}</option>
+                <option value="upload-mapping">{t('ridership.modeUpload')}</option>
               </select>
             </div>
-          )}
 
-          {/* (C2) Route filter */}
-          <div className="field" style={{ marginTop: 8 }}>
-            <span className="field-label">{t('ridership.routeFilter')}</span>
-            <input
-              type="text"
-              value={matchingRouteFilter}
-              onChange={e => setMatchingRouteFilter(e.target.value)}
-              placeholder={t('layer.routePlaceholder')}
-            />
-          </div>
+            {reconciliationMode !== 'direct' && (
+              <>
+                <MappingSection type="stop" label={t('ridership.stopMapping')}
+                  hasColumn={!!(fieldConfig?.boardingStopCol || fieldConfig?.alightingStopCol)} />
+                <MappingSection type="route" label={t('ridership.routeMapping')}
+                  hasColumn={!!fieldConfig?.routeCol} />
+                <MappingSection type="agency" label={t('ridership.agencyMapping')}
+                  hasColumn={!!fieldConfig?.agencyCol} />
+              </>
+            )}
+          </CollapsibleBox>
 
-          {/* (C3) Ridership per trip toggle */}
-          <div className="field" style={{ marginTop: 8 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+          {/* (3-3) Sub-layer selection + filters — 既定で開く */}
+          <CollapsibleBox title={`3-3 ${t('ridership.subLayer')}`} defaultOpen>
+            {availableMatching.size > 0 && (
+              <div className="field">
+                <select
+                  className="layer-select"
+                  value={matchingOutputLayer}
+                  onChange={e => setMatchingOutputLayer(e.target.value as MatchingOutputLayer)}
+                >
+                  {MATCHING_SUB_LAYERS
+                    .filter(sub => availableMatching.has(sub.id))
+                    .map(sub => (
+                      <option key={sub.id} value={sub.id}>
+                        {sub.label} — {t(sub.descKey)}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            )}
+
+            {/* Route filter */}
+            <div className="field" style={{ marginTop: 8 }}>
+              <span className="field-label">{t('ridership.routeFilter')}</span>
               <input
-                type="checkbox"
-                checked={matchingShowRidershipPerTrip}
-                onChange={e => setMatchingShowRidershipPerTrip(e.target.checked)}
+                type="text"
+                value={matchingRouteFilter}
+                onChange={e => setMatchingRouteFilter(e.target.value)}
+                placeholder={t('layer.routePlaceholder')}
               />
-              {t('ridership.perTripToggle')}
-            </label>
-          </div>
+            </div>
 
-          {/* (C4) Aggregate-only options: join all columns + only-matched */}
-          {isAggregate && (
+            {/* Ridership per trip toggle */}
             <div className="field" style={{ marginTop: 8 }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
                 <input
                   type="checkbox"
-                  checked={matchingJoinAllColumns}
-                  onChange={e => setMatchingJoinAllColumns(e.target.checked)}
+                  checked={matchingShowRidershipPerTrip}
+                  onChange={e => setMatchingShowRidershipPerTrip(e.target.checked)}
                 />
-                {t('ridership.joinAllColumns')}
-              </label>
-              {keyColumnDuplicates && (
-                <div style={{ fontSize: 10, color: 'var(--color-warning)', marginTop: 4 }}>
-                  {tf('ridership.dupWarning', keyColumnDuplicates.column, keyColumnDuplicates.count)}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* (C5) Only-matched output toggle */}
-          {isAggregate && (
-            <div className="field" style={{ marginTop: 8 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
-                <input
-                  type="checkbox"
-                  checked={matchingOnlyMatched}
-                  onChange={e => setMatchingOnlyMatched(e.target.checked)}
-                />
-                {t('ridership.onlyMatched')}
+                {t('ridership.perTripToggle')}
               </label>
             </div>
-          )}
 
-          {/* (D) Reconciliation */}
-          <div className="field">
-            <label className="field-label">{t('ridership.mode')}</label>
-            <select
-              className="layer-select"
-              value={reconciliationMode}
-              onChange={e => setReconciliationMode(e.target.value as 'direct' | 'auto-match' | 'upload-mapping')}
-            >
-              <option value="direct">{t('ridership.modeDirect')}</option>
-              <option value="auto-match">{t('ridership.modeAuto')}</option>
-              <option value="upload-mapping">{t('ridership.modeUpload')}</option>
-            </select>
-          </div>
+            {/* Aggregate-only options: join all columns + only-matched */}
+            {isAggregate && (
+              <div className="field" style={{ marginTop: 8 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                  <input
+                    type="checkbox"
+                    checked={matchingJoinAllColumns}
+                    onChange={e => setMatchingJoinAllColumns(e.target.checked)}
+                  />
+                  {t('ridership.joinAllColumns')}
+                </label>
+                {keyColumnDuplicates && (
+                  <div style={{ fontSize: 10, color: 'var(--color-warning)', marginTop: 4 }}>
+                    {tf('ridership.dupWarning', keyColumnDuplicates.column, keyColumnDuplicates.count)}
+                  </div>
+                )}
+              </div>
+            )}
 
-          {reconciliationMode !== 'direct' && (
-            <>
-              <MappingSection type="stop" label={t('ridership.stopMapping')}
-                hasColumn={!!(fieldConfig?.boardingStopCol || fieldConfig?.alightingStopCol)} />
-              <MappingSection type="route" label={t('ridership.routeMapping')}
-                hasColumn={!!fieldConfig?.routeCol} />
-              <MappingSection type="agency" label={t('ridership.agencyMapping')}
-                hasColumn={!!fieldConfig?.agencyCol} />
-            </>
-          )}
+            {/* Only-matched output toggle */}
+            {isAggregate && (
+              <div className="field" style={{ marginTop: 8 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                  <input
+                    type="checkbox"
+                    checked={matchingOnlyMatched}
+                    onChange={e => setMatchingOnlyMatched(e.target.checked)}
+                  />
+                  {t('ridership.onlyMatched')}
+                </label>
+              </div>
+            )}
+          </CollapsibleBox>
 
           {/* (E) Join execution */}
           <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
@@ -740,6 +760,18 @@ export function RidershipPanel() {
               {t('ridership.clear')}
             </button>
           </div>
+
+          {/* 便数表示 → 便時刻表示トグル（trip 列を持つサブレイヤーのみ） */}
+          {TRIP_COLUMN_SUBLAYERS.has(matchingOutputLayer) && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 11 }}>
+              <input
+                type="checkbox"
+                checked={showTripTimes}
+                onChange={e => setShowTripTimes(e.target.checked)}
+              />
+              {t('layer.showTripTimes')}
+            </label>
+          )}
 
           {joinStats && (
             <dl className="summary" style={{ marginTop: 8 }}>

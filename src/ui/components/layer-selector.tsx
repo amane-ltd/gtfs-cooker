@@ -119,9 +119,10 @@ export function LayerSelector() {
     if (!checked) clearTravelTimeTargets();
   };
 
-  // 時刻帯別 trip 列を持つレイヤーでのみ「便時刻表示」トグルを出す
+  // 時刻帯別 trip 列を持つレイヤーでのみ「便時刻表示」トグルを出す。
+  // matching レイヤーでは乗降実績パネル（結合実行の下）に表示するため、ここでは出さない。
   const effectiveLayer: string = selectedLayer === 'matching' ? matchingOutputLayer : selectedLayer;
-  const showTripTimesToggle = TRIP_COLUMN_LAYERS.has(effectiveLayer);
+  const showTripTimesToggle = selectedLayer !== 'matching' && TRIP_COLUMN_LAYERS.has(effectiveLayer);
 
   const needsRouteInfo = selectedLayer === 'stops' || selectedLayer === 'lines' || selectedLayer === 'lines-dissolved';
   useEffect(() => {
