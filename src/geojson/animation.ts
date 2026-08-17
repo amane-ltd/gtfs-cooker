@@ -88,7 +88,7 @@ function roundCoord4(coords: Coord4[], precision: number): Coord4[] {
   ]);
 }
 
-export function buildTripsGeoJSON(
+export function buildAnimationGeoJSON(
   stopTimes: TripStopTime[],
   baseDateStr: string,
   selectedProperties: string[],

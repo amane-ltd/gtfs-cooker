@@ -4,7 +4,7 @@ import { useT } from '../hooks/use-t';
 import type { LayerType, StopsDissolvedGroupBy, LinesDissolvedGroupBy, LinesFilterColumn } from '../../gtfs/types';
 
 type LayerDescKey =
-  | 'layer.stops' | 'layer.lines' | 'layer.trips'
+  | 'layer.stops' | 'layer.lines' | 'layer.animation'
   | 'layer.stops-buffer' | 'layer.lines-buffer'
   | 'layer.stops-dissolved' | 'layer.lines-dissolved'
   | 'layer.envelope' | 'layer.convex' | 'layer.concave'
@@ -17,7 +17,7 @@ const LAYER_GROUPS: { group: string; layers: { id: LayerType; label: string; des
     layers: [
       { id: 'stops', label: 'stops', descKey: 'layer.stops' },
       { id: 'lines', label: 'lines', descKey: 'layer.lines' },
-      { id: 'trips', label: 'trips', descKey: 'layer.trips' },
+      { id: 'animation', label: 'animation', descKey: 'layer.animation' },
       { id: 'segments', label: 'segments', descKey: 'layer.segments' },
     ],
   },
@@ -85,10 +85,10 @@ export function LayerSelector() {
   const matchingOutputLayer = useAppStore(s => s.matchingOutputLayer);
   const showTripTimes = useAppStore(s => s.showTripTimes);
   const setShowTripTimes = useAppStore(s => s.setShowTripTimes);
-  const tripsBaseDate = useAppStore(s => s.tripsBaseDate);
-  const setTripsBaseDate = useAppStore(s => s.setTripsBaseDate);
-  const tripsRouteFilter = useAppStore(s => s.tripsRouteFilter);
-  const setTripsRouteFilter = useAppStore(s => s.setTripsRouteFilter);
+  const animationBaseDate = useAppStore(s => s.animationBaseDate);
+  const setAnimationBaseDate = useAppStore(s => s.setAnimationBaseDate);
+  const animationRouteFilter = useAppStore(s => s.animationRouteFilter);
+  const setAnimationRouteFilter = useAppStore(s => s.setAnimationRouteFilter);
   const bufferRadius = useAppStore(s => s.bufferRadius);
   const setBufferRadius = useAppStore(s => s.setBufferRadius);
   const concaveMaxEdge = useAppStore(s => s.concaveMaxEdge);
@@ -182,15 +182,15 @@ export function LayerSelector() {
         </label>
       )}
 
-      {selectedLayer === 'trips' && (
+      {selectedLayer === 'animation' && (
         <>
           <div className="field" style={{ marginTop: 10 }}>
             <span className="field-label">{t('layer.baseDate')}</span>
-            <input type="date" value={tripsBaseDate} onChange={e => setTripsBaseDate(e.target.value)} />
+            <input type="date" value={animationBaseDate} onChange={e => setAnimationBaseDate(e.target.value)} />
           </div>
           <div className="field">
             <span className="field-label">{t('layer.routeFilter')}</span>
-            <input type="text" value={tripsRouteFilter} onChange={e => setTripsRouteFilter(e.target.value)} placeholder={t('layer.routePlaceholder')} />
+            <input type="text" value={animationRouteFilter} onChange={e => setAnimationRouteFilter(e.target.value)} placeholder={t('layer.routePlaceholder')} />
           </div>
         </>
       )}

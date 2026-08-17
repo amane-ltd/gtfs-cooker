@@ -50,8 +50,8 @@ export function TimeBar() {
   // 表示中レイヤーがアニメーション対象か判定
   const displayedLayer = selectedLayer === 'matching' ? matchingOutputLayer : selectedLayer;
   const isAnimatable =
-    displayedLayer === 'trips'
-    || displayedLayer === 'matching-trips'
+    displayedLayer === 'animation'
+    || displayedLayer === 'matching-animation'
     || displayedLayer === 'matching-ridership';
   const hasContent = displayedLayer in generatedLayers
     && generatedLayers[displayedLayer]!.features.length > 0;

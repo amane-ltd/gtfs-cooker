@@ -16,7 +16,7 @@ const SELECTABLE_FORMATS: { value: RidershipFormat; key: string }[] = [
 type MatchingLayerDescKey =
   | 'layer.matching-stops' | 'layer.matching-lines' | 'layer.matching-segments'
   | 'layer.matching-flow' | 'layer.matching-od'
-  | 'layer.matching-trips' | 'layer.matching-ridership';
+  | 'layer.matching-animation' | 'layer.matching-ridership';
 
 const MATCHING_SUB_LAYERS: { id: MatchingOutputLayer; label: string; descKey: MatchingLayerDescKey }[] = [
   { id: 'matching-stops', label: 'matching-stops', descKey: 'layer.matching-stops' },
@@ -24,7 +24,7 @@ const MATCHING_SUB_LAYERS: { id: MatchingOutputLayer; label: string; descKey: Ma
   { id: 'matching-segments', label: 'matching-segments', descKey: 'layer.matching-segments' },
   { id: 'matching-flow', label: 'matching-flow', descKey: 'layer.matching-flow' },
   { id: 'matching-od', label: 'matching-od', descKey: 'layer.matching-od' },
-  { id: 'matching-trips', label: 'matching-trips', descKey: 'layer.matching-trips' },
+  { id: 'matching-animation', label: 'matching-animation', descKey: 'layer.matching-animation' },
   { id: 'matching-ridership', label: 'matching-ridership', descKey: 'layer.matching-ridership' },
 ];
 
@@ -47,9 +47,9 @@ function getAvailableMatchingLayers(fieldConfig: RidershipFieldConfig | null): S
   } else if (hasTripDetail) {
     available.add('matching-segments');
   }
-  // matching-trips: OD（時刻列必須）or 停留所×便別実績
+  // matching-animation: OD（時刻列必須）or 停留所×便別実績
   if ((hasOD && fieldConfig.timeCol) || hasTripDetail) {
-    available.add('matching-trips');
+    available.add('matching-animation');
   }
   // matching-ridership: OD（時刻列必須）のみ。停留所×便別実績は OD リンクなしのため不可
   if (hasOD && fieldConfig.timeCol) {
@@ -499,7 +499,7 @@ function MappingTable({ type, rows }: { type: MappingType; rows: MappingRow[] })
 const MAPPING_SUBLAYERS: Record<MappingType, string[]> = {
   stop: [
     'matching-stops', 'matching-segments', 'matching-flow', 'matching-od',
-    'matching-trips', 'matching-ridership',
+    'matching-animation', 'matching-ridership',
   ],
   route: ['matching-lines'],
   agency: [],

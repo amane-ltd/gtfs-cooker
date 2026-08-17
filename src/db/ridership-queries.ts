@@ -861,7 +861,7 @@ export async function queryRidershipArcs(db: AsyncDuckDB): Promise<RidershipArcR
 }
 
 // ───────────────────────────────────────────────────────────
-// Phase 1 / 2: matching-trips  (per-trip onboard counts)
+// Phase 1 / 2: matching-animation  (per-trip onboard counts)
 // ───────────────────────────────────────────────────────────
 
 /**
@@ -1047,7 +1047,7 @@ async function executeMatchingTripsForOD(
 }
 
 /**
- * 停留所×便別実績フォーマット用 matching-trips。
+ * 停留所×便別実績フォーマット用 matching-animation。
  * 通過人数列が直接 onboard を表すため、推定不要で算出可能。
  * 出力テーブル: ridership_by_trip_segment（OD 版と同じスキーマ）
  */
@@ -1216,8 +1216,8 @@ async function executeMatchingTripsForTripDetail(
   }
 }
 
-/** matching-trips の前段テーブルを構築（フォーマットに応じて分岐）。 */
-export async function buildMatchingTripsTable(
+/** matching-animation の前段テーブルを構築（フォーマットに応じて分岐）。 */
+export async function buildMatchingAnimationTable(
   db: AsyncDuckDB,
   config: RidershipFieldConfig,
   mode: ReconciliationMode,
@@ -1248,7 +1248,7 @@ export interface TripAssignmentStats {
   outOfRangeDates: string[];
 }
 
-/** matching-trips 生成後の便割り当て統計と、feed_info との整合性チェック。 */
+/** matching-animation 生成後の便割り当て統計と、feed_info との整合性チェック。 */
 export async function queryTripAssignmentStats(db: AsyncDuckDB): Promise<TripAssignmentStats> {
   const empty: TripAssignmentStats = {
     assigned: 0, inputRows: 0, dropped: 0, outOfFeedRange: 0,
@@ -1320,7 +1320,7 @@ function formatDateNum(s: string | null): string | null {
   return `${t.slice(0, 4)}-${t.slice(4, 6)}-${t.slice(6, 8)}`;
 }
 
-export interface MatchingTripSegmentRow {
+export interface MatchingAnimationSegmentRow {
   trip_id: string;
   /** OD 形式のとき: 元データの日付 (YYYY-MM-DD)。停留所×便別実績では null。 */
   date_str: string | null;
@@ -1350,7 +1350,7 @@ export interface MatchingTripSegmentRow {
   alightings_at_to: number;
 }
 
-export async function queryMatchingTripSegments(db: AsyncDuckDB): Promise<MatchingTripSegmentRow[]> {
+export async function queryMatchingAnimationSegments(db: AsyncDuckDB): Promise<MatchingAnimationSegmentRow[]> {
   if (!await tableExists(db, 'ridership_by_trip_segment')) return [];
   const conn = await db.connect();
   try {

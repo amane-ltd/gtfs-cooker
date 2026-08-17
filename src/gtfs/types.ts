@@ -1,10 +1,10 @@
 export type MatchingOutputLayer =
   | 'matching-stops' | 'matching-lines' | 'matching-segments'
   | 'matching-flow' | 'matching-od'
-  | 'matching-trips' | 'matching-ridership';
+  | 'matching-animation' | 'matching-ridership';
 
 export type LayerType =
-  | 'stops' | 'lines' | 'trips'
+  | 'stops' | 'lines' | 'animation'
   | 'stops-buffer' | 'lines-buffer'
   | 'stops-dissolved' | 'lines-dissolved'
   | 'envelope' | 'convex' | 'concave'
@@ -95,7 +95,7 @@ export const LINES_JOIN_PROPERTIES = [
   'trip_22', 'trip_23', 'trip_24', 'trip_25', 'trip_26', 'trip_27',
 ] as const;
 
-export const TRIPS_DEFAULT_PROPERTIES = [
+export const ANIMATION_DEFAULT_PROPERTIES = [
   'trip_id', 'route_id', 'service_id',
   'route_short_name', 'route_long_name',
   'route_type', 'route_color',
@@ -186,7 +186,7 @@ export const MATCHING_OD_PROPERTIES = [
 ] as const;
 
 // Trips with ridership: 1 feature per (trip, segment), onboard count per segment
-export const MATCHING_TRIPS_PROPERTIES = [
+export const MATCHING_ANIMATION_PROPERTIES = [
   'trip_id', 'route_id', 'route_short_name', 'route_long_name',
   'direction_id', 'service_id',
   'from_stop_id', 'from_stop_name',
@@ -217,8 +217,8 @@ export function getAvailableProperties(layer: LayerType): string[] {
     case 'lines':
     case 'lines-buffer':
       return [...LINES_DEFAULT_PROPERTIES, ...LINES_JOIN_PROPERTIES];
-    case 'trips':
-      return [...TRIPS_DEFAULT_PROPERTIES];
+    case 'animation':
+      return [...ANIMATION_DEFAULT_PROPERTIES];
     case 'stops-dissolved':
       return [...STOPS_DISSOLVED_PROPERTIES];
     case 'lines-dissolved':
@@ -240,8 +240,8 @@ export function getAvailableProperties(layer: LayerType): string[] {
       return [...MATCHING_FLOW_PROPERTIES];
     case 'matching-od':
       return [...MATCHING_OD_PROPERTIES];
-    case 'matching-trips':
-      return [...MATCHING_TRIPS_PROPERTIES];
+    case 'matching-animation':
+      return [...MATCHING_ANIMATION_PROPERTIES];
     case 'matching-ridership':
       return [...MATCHING_RIDERSHIP_PROPERTIES];
     case 'matching':

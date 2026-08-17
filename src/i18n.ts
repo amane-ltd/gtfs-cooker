@@ -34,7 +34,7 @@ const en = {
 
   'layer.stops': 'Point — All stops',
   'layer.lines': 'MultiLineString — Routes',
-  'layer.trips': 'LineString — Kepler.gl Trip format',
+  'layer.animation': 'LineString — Kepler.gl Trip format',
   'layer.stops-buffer': 'Polygon — Stops buffer',
   'layer.lines-buffer': 'Polygon — Lines buffer',
   'layer.stops-dissolved': 'Polygon — Stops dissolved',
@@ -49,7 +49,7 @@ const en = {
   'layer.matching-segments': 'LineString — Ridership by segment',
   'layer.matching-flow': 'Arc — OD flow (aggregated)',
   'layer.matching-od': 'Arc — OD records (individual)',
-  'layer.matching-trips': 'LineString — Per-trip onboard count by segment',
+  'layer.matching-animation': 'LineString — Per-trip onboard count by segment',
   'layer.matching-ridership': 'LineString — Per-record trajectory (Kepler.gl Trip format)',
   'layer.baseDate': 'Base date (required)',
   'layer.routeFilter': 'route_id filter (optional)',
@@ -165,7 +165,7 @@ const en = {
   'ridership.feedRange.dropped': 'Dropped (no service)',
   'ridership.feedRange.outOfRange': 'Out of feed range',
   'ridership.feedRange.noFeedInfo': 'feed_info.txt not present — date validity not checked.',
-  'ridership.feedRange.warnMessage': 'Some ridership rows were dropped because no GTFS service is active on those dates. They contribute 0 ridership to matching-trips / matching-ridership.',
+  'ridership.feedRange.warnMessage': 'Some ridership rows were dropped because no GTFS service is active on those dates. They contribute 0 ridership to matching-animation / matching-ridership.',
   'ridership.notSet': '(not set)',
   'ridership.mappingCsvHint': 'CSV: 1st column = OD value, 2nd column = GTFS value',
 
@@ -206,7 +206,7 @@ const ja: Dict = {
 
   'layer.stops': 'Point — 全停留所',
   'layer.lines': 'MultiLineString — 路線',
-  'layer.trips': 'LineString — Kepler.gl Trip 形式',
+  'layer.animation': 'LineString — Kepler.gl Trip 形式',
   'layer.stops-buffer': 'Polygon — 停留所バッファ',
   'layer.lines-buffer': 'Polygon — 路線バッファ',
   'layer.stops-dissolved': 'Polygon — 停留所ディゾルブ',
@@ -221,7 +221,7 @@ const ja: Dict = {
   'layer.matching-segments': 'LineString — 区間別乗降数',
   'layer.matching-flow': 'Arc — OD流動（集約）',
   'layer.matching-od': 'Arc — OD実績（個票）',
-  'layer.matching-trips': 'LineString — 便ごとの区間別乗車中人数',
+  'layer.matching-animation': 'LineString — 便ごとの区間別乗車中人数',
   'layer.matching-ridership': 'LineString — 個票単位の軌跡（Kepler.gl Trip 形式）',
   'layer.baseDate': '基準日（必須）',
   'layer.routeFilter': 'route_id 絞り込み（任意）',
@@ -337,7 +337,7 @@ const ja: Dict = {
   'ridership.feedRange.dropped': '除外 (サービス無し)',
   'ridership.feedRange.outOfRange': '期間外の日数',
   'ridership.feedRange.noFeedInfo': 'feed_info.txt が無いため期間検証をスキップしました。',
-  'ridership.feedRange.warnMessage': '一部の乗降データはサービスカレンダーに該当する便が無いため除外されました。これらは matching-trips / matching-ridership に反映されません。',
+  'ridership.feedRange.warnMessage': '一部の乗降データはサービスカレンダーに該当する便が無いため除外されました。これらは matching-animation / matching-ridership に反映されません。',
   'ridership.notSet': '（未設定）',
   'ridership.mappingCsvHint': 'CSV: 1列目=OD側の値, 2列目=GTFS側の値',
 

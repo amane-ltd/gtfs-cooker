@@ -32,7 +32,7 @@ export function detectRidershipFormat(headers: string[]): RidershipFormat {
 }
 
 // 時刻 / 日時を表す列名の候補。優先度順（boarding > payment > datetime > time > hour）。
-// matching-trips の便割り当ては「乗車時刻」が必要なので boarding_at を優先する。
+// matching-animation の便割り当ては「乗車時刻」が必要なので boarding_at を優先する。
 const TIME_COL_CANDIDATES = [
   // 乗車時刻系（最優先）
   'boarding_at', 'boarding_time',

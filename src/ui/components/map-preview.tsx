@@ -18,7 +18,7 @@ const MAP_STYLE = `${import.meta.env.BASE_URL}pale_vector.json`;
 const COLORS: Record<string, [number, number, number, number]> = {
   stops:            [231,  76,  60, 200],
   lines:            [ 52, 152, 219, 255],
-  trips:            [ 46, 204, 113, 200],
+  animation:        [ 46, 204, 113, 200],
   'stops-buffer':   [231,  76,  60,  50],
   'lines-buffer':   [ 52, 152, 219,  50],
   'stops-dissolved':[230, 126,  34,  60],
@@ -32,7 +32,7 @@ const COLORS: Record<string, [number, number, number, number]> = {
   'matching-segments':[ 27, 186, 214, 230],
   'matching-flow':  [155,  89, 182, 200],
   'matching-od':   [149, 165, 166, 100],
-  'matching-trips': [233,  30,  99, 230],  // ピンク (Material Pink 500)
+  'matching-animation': [233,  30,  99, 230],  // ピンク (Material Pink 500)
   'matching-ridership': [241, 196,  15, 220],
 };
 
@@ -122,7 +122,7 @@ const MATCHING_MAX_PX: Record<string, number> = {
   'matching-segments': 10,
   'matching-flow': 10,
   'matching-od': 10,
-  'matching-trips': 10,
+  'matching-animation': 10,
   'matching-ridership': 10,
 };
 
@@ -167,17 +167,17 @@ function buildDeckLayers(
     const color = COLORS[key] ?? [100, 100, 100, 200];
 
     // ── Animated layers: TripsLayer (時刻つき LineString) ──
-    const animatable = key === 'trips' || key === 'matching-trips' || key === 'matching-ridership';
+    const animatable = key === 'animation' || key === 'matching-animation' || key === 'matching-ridership';
     if (animatable && hasTimestamps(fc) && timeBounds) {
       // matching 系は値（onboard / passenger_count）に比例し、最大値が固定ピクセル幅になるよう正規化
       const animVal = (f: Feature) =>
-        key === 'matching-trips' ? Number(f.properties?.onboard ?? 0)
+        key === 'matching-animation' ? Number(f.properties?.onboard ?? 0)
         : key === 'matching-ridership' ? Number(f.properties?.passenger_count ?? 0)
         : 0;
       const animMax = maxOfFeatures(fc.features, animVal);
       const animMaxPx = MATCHING_MAX_PX[key] ?? 10;
       const widthFn = (d: Feature): number => {
-        if (key === 'trips') return 6;
+        if (key === 'animation') return 6;
         return normSize(animVal(d), animMax, animMaxPx, 3);
       };
       layers.push(new TripsLayer({
@@ -194,8 +194,8 @@ function buildDeckLayers(
         getColor: (_d: Feature, { index }: { index: number }) =>
           pinnedInfo?.sourceLayerId === key && pinnedInfo.index === index ? HIGHLIGHT_COLOR : color,
         getWidth: widthFn,
-        widthUnits: key === 'trips' ? 'meters' : 'pixels',
-        widthMinPixels: key === 'trips' ? 5 : 0,
+        widthUnits: key === 'animation' ? 'meters' : 'pixels',
+        widthMinPixels: key === 'animation' ? 5 : 0,
         currentTime,
         trailLength,
         fadeTrail,
@@ -236,7 +236,7 @@ function buildDeckLayers(
           getLineWidth: [pinnedInfo?.sourceLayerId, pinnedInfo?.index],
         },
       }));
-    } else if (key === 'lines' || key === 'trips' || key === 'segments') {
+    } else if (key === 'lines' || key === 'animation' || key === 'segments') {
       const pathData = expandToPaths(fc.features);
       const segmentCasingWidth = (d: PathDatum) => {
         const v = Number(d.feature.properties?.trip_weekday ?? 0);
@@ -253,7 +253,7 @@ function buildDeckLayers(
         getWidth: key === 'segments' ? segmentCasingWidth : key === 'lines' ? 5 : 4,
         widthMinPixels: key === 'lines' ? 5 : 4,
         getColor: (_d: PathDatum, { index }: { index: number }) =>
-          pinnedInfo?.sourceLayerId === key && pinnedInfo.index === index ? HIGHLIGHT_COLOR : [255, 255, 255, key === 'trips' ? 150 : 230],
+          pinnedInfo?.sourceLayerId === key && pinnedInfo.index === index ? HIGHLIGHT_COLOR : [255, 255, 255, key === 'animation' ? 150 : 230],
         pickable: false,
         updateTriggers: { getColor: [pinnedInfo?.sourceLayerId, pinnedInfo?.index] },
       }));
@@ -394,12 +394,12 @@ function buildDeckLayers(
         onClick,
         updateTriggers: { getSourceColor: [pinnedInfo?.sourceLayerId, pinnedInfo?.index], getTargetColor: [pinnedInfo?.sourceLayerId, pinnedInfo?.index] },
       }));
-    } else if (key === 'matching-trips') {
+    } else if (key === 'matching-animation') {
       // 便ごとの区間 onboard を PathLayer で表示。幅は onboard に比例し最大値が固定ピクセル幅
       const pathData = expandToPaths(fc.features);
       const tripVal = (f: Feature) => Number(f.properties?.onboard ?? 0);
       const maxTrip = maxOfFeatures(fc.features, tripVal);
-      const tripMaxPx = MATCHING_MAX_PX['matching-trips']!;
+      const tripMaxPx = MATCHING_MAX_PX['matching-animation']!;
       const tripHoverClick = (handler: (info: PickingInfo) => void) => (info: PickingInfo) => {
         if (info.object) {
           const datum = info.object as PathDatum;

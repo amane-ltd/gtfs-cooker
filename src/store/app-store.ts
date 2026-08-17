@@ -7,7 +7,7 @@ import { dropAllTables, loadCsvIntoTable, getTableRowCount, tableExists } from '
 import { queryStops, queryShapePoints, queryRoutesWithShapes, queryTripsForDate, queryStopSequenceForRoute, querySegments, queryRouteStopLists, queryTravelTimesToStops } from '../db/queries';
 import { buildStopsGeoJSON } from '../geojson/stops';
 import { buildLinesGeoJSON } from '../geojson/lines';
-import { buildTripsGeoJSON } from '../geojson/trips';
+import { buildAnimationGeoJSON } from '../geojson/animation';
 import { buildStopsBuffer, buildLinesBuffer } from '../geojson/buffer';
 import { buildStopsDissolved, buildLinesDissolved } from '../geojson/dissolved';
 import { buildEnvelope, buildConvexHull, buildConcaveHull } from '../geojson/area';
@@ -26,15 +26,15 @@ import { detectRidershipFormat } from '../ridership/detect-format';
 import { autoMatch } from '../ridership/auto-match';
 import { loadRidershipCsv, loadMappingRows, loadMappingCsv, dropRidershipTables } from '../db/ridership-loader';
 import { defaultFieldConfig } from '../ridership/detect-format';
-import { queryDistinctOdValues, queryGtfsStopGroups, queryGtfsRoutesForMatch, queryGtfsAgenciesForMatch, executeRidershipJoin, queryRidershipFlows, queryRidershipArcs, HOUR_KEYS, buildMatchingTripsTable, buildMatchingRidershipTable, queryMatchingTripSegments, queryMatchingRidership, queryTripAssignmentStats } from '../db/ridership-queries';
-import type { RidershipArcRow, MatchingTripSegmentRow, MatchingRidershipRow, TripAssignmentStats } from '../db/ridership-queries';
+import { queryDistinctOdValues, queryGtfsStopGroups, queryGtfsRoutesForMatch, queryGtfsAgenciesForMatch, executeRidershipJoin, queryRidershipFlows, queryRidershipArcs, HOUR_KEYS, buildMatchingAnimationTable, buildMatchingRidershipTable, queryMatchingAnimationSegments, queryMatchingRidership, queryTripAssignmentStats } from '../db/ridership-queries';
+import type { RidershipArcRow, MatchingAnimationSegmentRow, MatchingRidershipRow, TripAssignmentStats } from '../db/ridership-queries';
 
 export type Phase = 'idle' | 'loading' | 'loaded' | 'generating' | 'done';
 export type ExportFormat = 'geojson' | 'csv' | 'xlsx';
 
 /** アニメーション対象レイヤー。座標 4 要素目に unix 秒が入っているもの。 */
 const ANIMATABLE_LAYERS: ReadonlySet<string> = new Set([
-  'trips', 'matching-trips', 'matching-ridership',
+  'animation', 'matching-animation', 'matching-ridership',
 ]);
 
 /** 生成済みレイヤーから unix 秒のレンジ (min, max) を抽出。 */
@@ -61,7 +61,7 @@ function computeTimeBounds(
 }
 
 const ALL_LAYERS: LayerType[] = [
-  'stops', 'lines', 'trips',
+  'stops', 'lines', 'animation',
   'stops-buffer', 'lines-buffer',
   'stops-dissolved', 'lines-dissolved',
   'envelope', 'convex', 'concave',
@@ -69,7 +69,7 @@ const ALL_LAYERS: LayerType[] = [
   'matching',
   'matching-stops', 'matching-lines', 'matching-segments',
   'matching-flow', 'matching-od',
-  'matching-trips', 'matching-ridership',
+  'matching-animation', 'matching-ridership',
 ];
 
 interface AppState {
@@ -78,8 +78,8 @@ interface AppState {
   gtfsSummary: GtfsSummary | null;
   validationResults: ValidationResult[];
   selectedLayer: LayerType;
-  tripsBaseDate: string;
-  tripsRouteFilter: string;
+  animationBaseDate: string;
+  animationRouteFilter: string;
   bufferRadius: number;
   concaveMaxEdge: number;
   stopsDissolvedGroupBy: StopsDissolvedGroupBy;
@@ -105,7 +105,7 @@ interface AppState {
   agencyMapping: MappingRow[];
   gtfsCandidates: Record<MappingType, CandidateGroup[]>;
   joinStats: JoinStats | null;
-  /** matching-trips / matching-ridership 生成時の便割り当て統計と feed_info 整合性 */
+  /** matching-animation / matching-ridership 生成時の便割り当て統計と feed_info 整合性 */
   tripAssignmentStats: TripAssignmentStats | null;
   matchingOutputLayer: MatchingOutputLayer;
   matchingRouteFilterIds: string[];
@@ -123,7 +123,7 @@ interface AppState {
   is3D: boolean;
 
   // Time animation
-  /** Current time in unix seconds (for animation of trips / matching-trips / matching-ridership) */
+  /** Current time in unix seconds (for animation of trips / matching-animation / matching-ridership) */
   currentTime: number;
   /** Min/max unix seconds across active animatable layers */
   timeBounds: { min: number; max: number } | null;
@@ -144,8 +144,8 @@ interface AppState {
   addLog: (level: LogEntry['level'], message: string) => void;
   setPhase: (phase: Phase) => void;
   selectLayer: (layer: LayerType) => void;
-  setTripsBaseDate: (date: string) => void;
-  setTripsRouteFilter: (filter: string) => void;
+  setAnimationBaseDate: (date: string) => void;
+  setAnimationRouteFilter: (filter: string) => void;
   setBufferRadius: (r: number) => void;
   setConcaveMaxEdge: (e: number) => void;
   setStopsDissolvedGroupBy: (g: StopsDissolvedGroupBy) => void;
@@ -200,8 +200,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   gtfsSummary: null,
   validationResults: [],
   selectedLayer: 'stops' as LayerType,
-  tripsBaseDate: new Date().toISOString().slice(0, 10),
-  tripsRouteFilter: '',
+  animationBaseDate: new Date().toISOString().slice(0, 10),
+  animationRouteFilter: '',
   bufferRadius: 300,
   concaveMaxEdge: 2,
   stopsDissolvedGroupBy: 'none' as StopsDissolvedGroupBy,
@@ -302,8 +302,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   selectLayer: (layer) => set({ selectedLayer: layer }),
 
-  setTripsBaseDate: (date) => set({ tripsBaseDate: date }),
-  setTripsRouteFilter: (filter) => set({ tripsRouteFilter: filter }),
+  setAnimationBaseDate: (date) => set({ animationBaseDate: date }),
+  setAnimationRouteFilter: (filter) => set({ animationRouteFilter: filter }),
   setBufferRadius: (r) => set({ bufferRadius: r }),
   setConcaveMaxEdge: (e) => set({ concaveMaxEdge: e }),
   setStopsDissolvedGroupBy: (g) => set({ stopsDissolvedGroupBy: g }),
@@ -439,7 +439,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       }
 
-      set({ gtfsSummary: summary, phase: 'loaded', tripsBaseDate: baseDate });
+      set({ gtfsSummary: summary, phase: 'loaded', animationBaseDate: baseDate });
       addLog('info', tf('log.loadComplete', stopCount, routeCount, tripCount));
     } catch (e) {
       addLog('error', tf('log.loadError', e instanceof Error ? e.message : String(e)));
@@ -521,19 +521,6 @@ export const useAppStore = create<AppState>((set, get) => ({
             aggregate: opts?.aggregate ?? false,
           },
         );
-      }
-
-      // segment / matching-segment を shape.txt に追従させるための shape 座標マップ
-      async function getSegmentShapes(): Promise<Map<string, import('../geojson/segments').ShapeGeometry>> {
-        const map = new Map<string, import('../geojson/segments').ShapeGeometry>();
-        if (!(await tableExists(db, 'shapes'))) return map;
-        const pts = await queryShapePoints(db);
-        for (const p of pts) {
-          let e = map.get(p.shape_id);
-          if (!e) { e = { coords: [] }; map.set(p.shape_id, e); }
-          e.coords.push([p.shape_pt_lon, p.shape_pt_lat]);
-        }
-        return map;
       }
 
       const hasRidershipStops = await tableExists(db, 'ridership_by_stop');
@@ -744,17 +731,17 @@ export const useAppStore = create<AppState>((set, get) => ({
         addLog('info', tf('log.features', 'lines', results.lines.features.length));
       }
 
-      if (layer === 'trips') {
-        if (!state.tripsBaseDate) {
+      if (layer === 'animation') {
+        if (!state.animationBaseDate) {
           addLog('warn', t('log.noBaseDate'));
         } else {
           const stopTimes = await queryTripsForDate(
-            db, state.tripsBaseDate, state.tripsRouteFilter || undefined,
+            db, state.animationBaseDate, state.animationRouteFilter || undefined,
           );
           const hasShapesForTrips = await tableExists(db, 'shapes');
           const tripShapePoints = hasShapesForTrips ? await queryShapePoints(db) : [];
-          results.trips = buildTripsGeoJSON(stopTimes, state.tripsBaseDate, props, coordinatePrecision, tripShapePoints);
-          addLog('info', tf('log.features', 'trips', results.trips.features.length));
+          results.animation = buildAnimationGeoJSON(stopTimes, state.animationBaseDate, props, coordinatePrecision, tripShapePoints);
+          addLog('info', tf('log.features', 'animation', results.animation.features.length));
         }
       }
 
@@ -842,7 +829,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       if (layer === 'segments') {
         const segRows = await querySegments(db, state.showTripTimes);
-        results.segments = buildSegmentsGeoJSON(segRows, await getSegmentShapes(), props, coordinatePrecision);
+        results.segments = buildSegmentsGeoJSON(segRows, props, coordinatePrecision);
         await enrichSegmentsWithRidership(results.segments);
         addLog('info', tf('log.features', 'segments', results.segments.features.length));
       }
@@ -897,7 +884,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       if (layer === 'matching-segments') {
         const segRows = await querySegments(db, state.showTripTimes);
-        const segFC = buildSegmentsGeoJSON(segRows, await getSegmentShapes(), [...getAvailableProperties('segments')], coordinatePrecision);
+        const segFC = buildSegmentsGeoJSON(segRows, [...getAvailableProperties('segments')], coordinatePrecision);
         await enrichSegmentsWithRidership(segFC);
         applyRouteFilter(segFC);
         results['matching-segments'] = segFC;
@@ -930,10 +917,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         return makeFeatureCollection(features);
       }
 
-      function buildMatchingTripsFeatures(rows: MatchingTripSegmentRow[]): FeatureCollection {
+      function buildMatchingAnimationFeatures(rows: MatchingAnimationSegmentRow[]): FeatureCollection {
         // SQL 側で OD レコードの日付込み unix を計算済み。停留所×便別実績では NULL なので
-        // tripsBaseDate でフォールバック。
-        const baseDate = state.tripsBaseDate || new Date().toISOString().slice(0, 10);
+        // animationBaseDate でフォールバック。
+        const baseDate = state.animationBaseDate || new Date().toISOString().slice(0, 10);
         const features: Feature[] = rows.map(r => {
           let departTs = r.departure_unix ?? null;
           let arriveTs = r.arrival_unix ?? null;
@@ -1033,9 +1020,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         addLog('info', tf('log.features', 'matching-od', results['matching-od'].features.length));
       }
 
-      const fallbackDate = state.tripsBaseDate || new Date().toISOString().slice(0, 10);
+      const fallbackDate = state.animationBaseDate || new Date().toISOString().slice(0, 10);
 
-      /** matching-trips / matching-ridership 共通: 便割り当て統計を計算し、UI / ログに反映 */
+      /** matching-animation / matching-ridership 共通: 便割り当て統計を計算し、UI / ログに反映 */
       async function recordTripAssignmentStats() {
         const stats = await queryTripAssignmentStats(db);
         set({ tripAssignmentStats: stats });
@@ -1047,20 +1034,20 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       }
 
-      // Phase 2: matching-trips（便 × 区間の onboard 可視化）
-      if (layer === 'matching-trips' && rFieldConfig) {
-        await buildMatchingTripsTable(db, rFieldConfig, state.reconciliationMode, fallbackDate);
+      // Phase 2: matching-animation（便 × 区間の onboard 可視化）
+      if (layer === 'matching-animation' && rFieldConfig) {
+        await buildMatchingAnimationTable(db, rFieldConfig, state.reconciliationMode, fallbackDate);
         await recordTripAssignmentStats();
-        const rows = await queryMatchingTripSegments(db);
-        results['matching-trips'] = buildMatchingTripsFeatures(rows);
-        applyRouteFilter(results['matching-trips']);
-        addLog('info', tf('log.features', 'matching-trips', results['matching-trips'].features.length));
+        const rows = await queryMatchingAnimationSegments(db);
+        results['matching-animation'] = buildMatchingAnimationFeatures(rows);
+        applyRouteFilter(results['matching-animation']);
+        addLog('info', tf('log.features', 'matching-animation', results['matching-animation'].features.length));
       }
 
       // Phase 3: matching-ridership（個票単位の軌跡）
       if (layer === 'matching-ridership' && rFieldConfig) {
-        // 前段で trip assignment が必要なので buildMatchingTripsTable を先に走らせる
-        await buildMatchingTripsTable(db, rFieldConfig, state.reconciliationMode, fallbackDate);
+        // 前段で trip assignment が必要なので buildMatchingAnimationTable を先に走らせる
+        await buildMatchingAnimationTable(db, rFieldConfig, state.reconciliationMode, fallbackDate);
         await recordTripAssignmentStats();
         await buildMatchingRidershipTable(db, rFieldConfig, fallbackDate);
         const rows = await queryMatchingRidership(db);
@@ -1411,8 +1398,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       gtfsSummary: null,
       validationResults: [],
       selectedLayer: 'stops' as LayerType,
-      tripsBaseDate: new Date().toISOString().slice(0, 10),
-      tripsRouteFilter: '',
+      animationBaseDate: new Date().toISOString().slice(0, 10),
+      animationRouteFilter: '',
       bufferRadius: 300,
       concaveMaxEdge: 2,
       stopsDissolvedGroupBy: 'none' as StopsDissolvedGroupBy,
