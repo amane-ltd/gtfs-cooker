@@ -114,6 +114,7 @@ interface SegmentRow {
   to_stop_lon: number;
   route_id: string;
   route_short_name: string | null;
+  route_long_name: string | null;
   // 区間に対応する代表 shape。shape 追従描画（投影で区間を切り出す）に使う
   shape_id: string | null;
   trip_weekday: number;
@@ -597,6 +598,7 @@ export async function querySegments(db: AsyncDuckDB, showTripTimes = false): Pro
         SELECT
           CAST(t.route_id AS VARCHAR) AS route_id,
           r.route_short_name,
+          r.route_long_name,
           CAST(st.stop_id AS VARCHAR) AS stop_id,
           CAST(st.stop_sequence AS INTEGER) AS stop_sequence,
           CAST(t.trip_id AS VARCHAR) AS trip_id,
@@ -616,6 +618,7 @@ export async function querySegments(db: AsyncDuckDB, showTripTimes = false): Pro
         SELECT
           route_id,
           route_short_name,
+          route_long_name,
           -- 便（trip）が持つ経路パターン。同一 shape の連続停留所ペアごとに集約し、
           -- その shape に沿って区間を描画する（便と無関係な代表 shape は使わない）
           shape_id,
@@ -630,7 +633,7 @@ export async function querySegments(db: AsyncDuckDB, showTripTimes = false): Pro
           COUNT(DISTINCT CASE WHEN ${weekdayFilter}hour BETWEEN 21 AND 27 THEN trip_id END) AS trip_latenight
         FROM ordered
         WHERE next_stop_id IS NOT NULL
-        GROUP BY route_id, route_short_name, shape_id, stop_id, next_stop_id
+        GROUP BY route_id, route_short_name, route_long_name, shape_id, stop_id, next_stop_id
       )
       SELECT
         seg.from_stop_id,
@@ -643,6 +646,7 @@ export async function querySegments(db: AsyncDuckDB, showTripTimes = false): Pro
         CAST(s2.stop_lon AS DOUBLE) AS to_stop_lon,
         seg.route_id,
         seg.route_short_name,
+        seg.route_long_name,
         seg.shape_id,
         seg.trip_weekday,
         seg.trip_holiday,

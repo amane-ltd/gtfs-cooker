@@ -1458,7 +1458,8 @@ export async function buildMatchingRidershipTable(
         agg.*,
         CAST(rs.stop_name AS VARCHAR) AS boarding_stop_name,
         CAST(ra.stop_name AS VARCHAR) AS alighting_stop_name,
-        r.route_short_name
+        r.route_short_name,
+        r.route_long_name
       FROM agg
       LEFT JOIN stops rs ON CAST(rs.stop_id AS VARCHAR) = agg.boarding_stop_id
       LEFT JOIN stops ra ON CAST(ra.stop_id AS VARCHAR) = agg.alighting_stop_id
@@ -1474,6 +1475,7 @@ export interface MatchingRidershipRow {
   trip_id: string;
   route_id: string;
   route_short_name: string | null;
+  route_long_name: string | null;
   /** OD レコードの日付 (YYYY-MM-DD)。data 行から抽出。 */
   date_str: string | null;
   boarding_stop_id: string;
@@ -1515,6 +1517,7 @@ export async function queryMatchingRidership(db: AsyncDuckDB): Promise<MatchingR
         trip_id: String(o.trip_id),
         route_id: String(o.route_id ?? ''),
         route_short_name: o.route_short_name == null ? null : String(o.route_short_name),
+        route_long_name: o.route_long_name == null ? null : String(o.route_long_name),
         date_str: o.date_str == null ? null : String(o.date_str),
         boarding_stop_id: String(o.boarding_stop_id ?? ''),
         boarding_stop_name: String(o.boarding_stop_name ?? ''),

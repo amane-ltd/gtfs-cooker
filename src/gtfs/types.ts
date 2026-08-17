@@ -117,7 +117,7 @@ export const ENVELOPE_PROPERTIES = ['agency_name', 'bbox'] as const;
 export const SEGMENTS_PROPERTIES = [
   'from_stop_id', 'from_stop_name', 'from_stop_lat', 'from_stop_lon',
   'to_stop_id', 'to_stop_name', 'to_stop_lat', 'to_stop_lon',
-  'route_id', 'route_short_name',
+  'route_id', 'route_short_name', 'route_long_name',
   'trip_weekday', 'trip_holiday',
   'trip_morning', 'trip_daytime', 'trip_evening', 'trip_latenight',
   'trip_04', 'trip_05', 'trip_06', 'trip_07', 'trip_08', 'trip_09',
@@ -200,7 +200,7 @@ export const MATCHING_TRIPS_PROPERTIES = [
 // Per-ridership-record trajectory (Kepler.gl Trip format)
 export const MATCHING_RIDERSHIP_PROPERTIES = [
   'ridership_record_id',
-  'trip_id', 'route_id', 'route_short_name',
+  'trip_id', 'route_id', 'route_short_name', 'route_long_name',
   'boarding_stop_id', 'boarding_stop_name',
   'boarding_time',
   'alighting_stop_id', 'alighting_stop_name',

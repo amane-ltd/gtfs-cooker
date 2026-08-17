@@ -999,6 +999,7 @@ export const useAppStore = create<AppState>((set, get) => ({
               date: r.date_str,
               route_id: r.route_id,
               route_short_name: r.route_short_name,
+              route_long_name: r.route_long_name,
               boarding_stop_id: r.boarding_stop_id,
               boarding_stop_name: r.boarding_stop_name,
               boarding_time: unixToHHMM(r.boarding_unix),
