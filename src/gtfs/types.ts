@@ -1,7 +1,7 @@
 export type MatchingOutputLayer =
   | 'matching-stops' | 'matching-lines' | 'matching-segments'
   | 'matching-flow' | 'matching-od'
-  | 'matching-animation' | 'matching-ridership';
+  | 'matching-trips' | 'matching-animation' | 'matching-ridership';
 
 export type LayerType =
   | 'stops' | 'lines' | 'animation'
@@ -191,10 +191,23 @@ export const MATCHING_ANIMATION_PROPERTIES = [
   'direction_id', 'service_id',
   'from_stop_id', 'from_stop_name',
   'to_stop_id', 'to_stop_name',
-  'departure_time', 'arrival_time',
+  'departure_datetime', 'arrival_datetime',  // YYYY-MM-DD HH:MM:SS
   'onboard',                // 区間通過時の乗車中人数
   'boardings_at_from',      // from_stop での乗車人数
   'alightings_at_to',       // to_stop での降車人数
+] as const;
+
+// matching-trips: 便×区間の onboard を静的セグメントで表示。
+// アニメ用の時刻列に加え、datetime 形式（YYYY-MM-DD HH:MM:SS）の列を持つ。
+export const MATCHING_TRIPS_PROPERTIES = [
+  'trip_id', 'route_id', 'route_short_name', 'route_long_name',
+  'direction_id', 'service_id',
+  'from_stop_id', 'from_stop_name',
+  'to_stop_id', 'to_stop_name',
+  'departure_datetime', 'arrival_datetime',  // YYYY-MM-DD HH:MM:SS
+  'onboard',
+  'boardings_at_from',
+  'alightings_at_to',
 ] as const;
 
 // Per-ridership-record trajectory (Kepler.gl Trip format)
@@ -202,9 +215,9 @@ export const MATCHING_RIDERSHIP_PROPERTIES = [
   'ridership_record_id',
   'trip_id', 'route_id', 'route_short_name', 'route_long_name',
   'boarding_stop_id', 'boarding_stop_name',
-  'boarding_time',
+  'boarding_datetime',
   'alighting_stop_id', 'alighting_stop_name',
-  'alighting_time',
+  'alighting_datetime',
   'passenger_count',
   'duration_min',
 ] as const;
@@ -240,6 +253,8 @@ export function getAvailableProperties(layer: LayerType): string[] {
       return [...MATCHING_FLOW_PROPERTIES];
     case 'matching-od':
       return [...MATCHING_OD_PROPERTIES];
+    case 'matching-trips':
+      return [...MATCHING_TRIPS_PROPERTIES];
     case 'matching-animation':
       return [...MATCHING_ANIMATION_PROPERTIES];
     case 'matching-ridership':

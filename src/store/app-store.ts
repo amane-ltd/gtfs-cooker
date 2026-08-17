@@ -69,7 +69,7 @@ const ALL_LAYERS: LayerType[] = [
   'matching',
   'matching-stops', 'matching-lines', 'matching-segments',
   'matching-flow', 'matching-od',
-  'matching-animation', 'matching-ridership',
+  'matching-trips', 'matching-animation', 'matching-ridership',
 ];
 
 interface AppState {
@@ -952,8 +952,58 @@ export const useAppStore = create<AppState>((set, get) => ({
               from_stop_name: r.from_stop_name,
               to_stop_id: r.to_stop_id,
               to_stop_name: r.to_stop_name,
-              departure_time: r.departure_time,
-              arrival_time: r.arrival_time,
+              departure_datetime: departTs != null ? unixToDateTime(departTs) : null,
+              arrival_datetime: arriveTs != null ? unixToDateTime(arriveTs) : null,
+              onboard: r.onboard,
+              boardings_at_from: r.boardings_at_from,
+              alightings_at_to: r.alightings_at_to,
+            },
+          };
+        });
+        return makeFeatureCollection(features);
+      }
+
+      // unix 秒 → "YYYY-MM-DD HH:MM:SS"（parseGtfsTime と同じ UTC 基準）
+      function unixToDateTime(unix: number): string {
+        const d = new Date(Math.floor(unix) * 1000);
+        const p = (n: number) => String(n).padStart(2, '0');
+        return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} `
+          + `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
+      }
+
+      // matching-trips: matching-animation と同じ便×区間 onboard データを、
+      // 時刻を持たない静的な 2D 線として描く（アニメーションしない）。
+      function buildMatchingTripsFeatures(rows: MatchingAnimationSegmentRow[]): FeatureCollection {
+        // OD 形式は unix、停留所×便別実績は基準日 + GTFS 時刻で datetime を組み立てる
+        const baseDate = state.animationBaseDate || new Date().toISOString().slice(0, 10);
+        const features: Feature[] = rows.map(r => {
+          const departTs = r.departure_unix
+            ?? (r.departure_time ? parseGtfsTime(r.departure_time, baseDate) : null);
+          const arriveTs = r.arrival_unix
+            ?? (r.arrival_time ? parseGtfsTime(r.arrival_time, baseDate) : null);
+          return {
+            type: 'Feature' as const,
+            geometry: {
+              type: 'LineString' as const,
+              coordinates: [
+                [r.from_stop_lon, r.from_stop_lat],
+                [r.to_stop_lon, r.to_stop_lat],
+              ],
+            },
+            properties: {
+              trip_id: r.trip_id,
+              date: r.date_str,
+              route_id: r.route_id,
+              route_short_name: r.route_short_name,
+              route_long_name: r.route_long_name,
+              service_id: r.service_id,
+              direction_id: r.direction_id < 0 ? null : r.direction_id,
+              from_stop_id: r.from_stop_id,
+              from_stop_name: r.from_stop_name,
+              to_stop_id: r.to_stop_id,
+              to_stop_name: r.to_stop_name,
+              departure_datetime: departTs != null ? unixToDateTime(departTs) : null,
+              arrival_datetime: arriveTs != null ? unixToDateTime(arriveTs) : null,
               onboard: r.onboard,
               boardings_at_from: r.boardings_at_from,
               alightings_at_to: r.alightings_at_to,
@@ -989,10 +1039,10 @@ export const useAppStore = create<AppState>((set, get) => ({
               route_long_name: r.route_long_name,
               boarding_stop_id: r.boarding_stop_id,
               boarding_stop_name: r.boarding_stop_name,
-              boarding_time: unixToHHMM(r.boarding_unix),
+              boarding_datetime: unixToDateTime(r.boarding_unix),
               alighting_stop_id: r.alighting_stop_id,
               alighting_stop_name: r.alighting_stop_name,
-              alighting_time: unixToHHMM(r.alighting_unix),
+              alighting_datetime: unixToDateTime(r.alighting_unix),
               passenger_count: r.passenger_count,
               duration_min: durationMin,
             },
@@ -1001,12 +1051,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         return makeFeatureCollection(features);
       }
 
-      function unixToHHMM(unix: number): string {
-        const tod = Math.floor(unix) % 86400;
-        const h = Math.floor(tod / 3600);
-        const m = Math.floor((tod % 3600) / 60);
-        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-      }
 
       if (layer === 'matching-flow' && await tableExists(db, 'ridership_by_flow')) {
         const rows = await queryRidershipFlows(db);
@@ -1032,6 +1076,16 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (stats.uniqueDates.length > 0) {
           addLog('info', `便割り当て: ${stats.assigned} 行に対し ${stats.uniqueDates.length} 日のサービスカレンダーを参照 (${stats.uniqueDates[0]} 〜 ${stats.uniqueDates[stats.uniqueDates.length - 1]})`);
         }
+      }
+
+      // matching-trips: 便 × 区間の onboard を静的セグメントで（アニメなし）
+      if (layer === 'matching-trips' && rFieldConfig) {
+        await buildMatchingAnimationTable(db, rFieldConfig, state.reconciliationMode, fallbackDate);
+        await recordTripAssignmentStats();
+        const rows = await queryMatchingAnimationSegments(db);
+        results['matching-trips'] = buildMatchingTripsFeatures(rows);
+        applyRouteFilter(results['matching-trips']);
+        addLog('info', tf('log.features', 'matching-trips', results['matching-trips'].features.length));
       }
 
       // Phase 2: matching-animation（便 × 区間の onboard 可視化）

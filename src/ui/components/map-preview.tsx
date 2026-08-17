@@ -32,6 +32,7 @@ const COLORS: Record<string, [number, number, number, number]> = {
   'matching-segments':[ 27, 186, 214, 230],
   'matching-flow':  [155,  89, 182, 200],
   'matching-od':   [149, 165, 166, 100],
+  'matching-trips':  [230, 126,  34, 230],  // オレンジ (Material Orange 600)
   'matching-animation': [233,  30,  99, 230],  // ピンク (Material Pink 500)
   'matching-ridership': [241, 196,  15, 220],
 };
@@ -122,6 +123,7 @@ const MATCHING_MAX_PX: Record<string, number> = {
   'matching-segments': 10,
   'matching-flow': 10,
   'matching-od': 10,
+  'matching-trips': 10,
   'matching-animation': 10,
   'matching-ridership': 10,
 };
@@ -394,12 +396,12 @@ function buildDeckLayers(
         onClick,
         updateTriggers: { getSourceColor: [pinnedInfo?.sourceLayerId, pinnedInfo?.index], getTargetColor: [pinnedInfo?.sourceLayerId, pinnedInfo?.index] },
       }));
-    } else if (key === 'matching-animation') {
+    } else if (key === 'matching-animation' || key === 'matching-trips') {
       // 便ごとの区間 onboard を PathLayer で表示。幅は onboard に比例し最大値が固定ピクセル幅
       const pathData = expandToPaths(fc.features);
       const tripVal = (f: Feature) => Number(f.properties?.onboard ?? 0);
       const maxTrip = maxOfFeatures(fc.features, tripVal);
-      const tripMaxPx = MATCHING_MAX_PX['matching-animation']!;
+      const tripMaxPx = MATCHING_MAX_PX[key]!;
       const tripHoverClick = (handler: (info: PickingInfo) => void) => (info: PickingInfo) => {
         if (info.object) {
           const datum = info.object as PathDatum;
