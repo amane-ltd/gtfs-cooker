@@ -616,10 +616,11 @@ export async function querySegments(db: AsyncDuckDB, showTripTimes = false): Pro
         SELECT
           route_id,
           route_short_name,
+          -- 便（trip）が持つ経路パターン。同一 shape の連続停留所ペアごとに集約し、
+          -- その shape に沿って区間を描画する（便と無関係な代表 shape は使わない）
+          shape_id,
           stop_id AS from_stop_id,
           next_stop_id AS to_stop_id,
-          -- 代表 shape（最小 trip_id の行を採用）。投影で区間を切り出すのに使う
-          arg_min(shape_id, trip_id) AS shape_id,
           ${weekdayExpr} AS trip_weekday,
           ${holidayExpr} AS trip_holiday,
           ${hourlyLines.join(',\n          ')},
@@ -629,7 +630,7 @@ export async function querySegments(db: AsyncDuckDB, showTripTimes = false): Pro
           COUNT(DISTINCT CASE WHEN ${weekdayFilter}hour BETWEEN 21 AND 27 THEN trip_id END) AS trip_latenight
         FROM ordered
         WHERE next_stop_id IS NOT NULL
-        GROUP BY route_id, route_short_name, stop_id, next_stop_id
+        GROUP BY route_id, route_short_name, shape_id, stop_id, next_stop_id
       )
       SELECT
         seg.from_stop_id,
