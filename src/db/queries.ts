@@ -345,21 +345,50 @@ export async function queryRoutesWithShapes(db: AsyncDuckDB, showTripTimes = fal
   }
 }
 
+export interface TripsForDateResult {
+  trips: TripStopTime[];
+  /** 設定日が feed 期間外 or feed 期間が未定義のため、日付範囲を無視して曜日のみで抽出したか */
+  usedWeekdayFallback: boolean;
+}
+
 export async function queryTripsForDate(
   db: AsyncDuckDB,
   baseDateStr: string,
   routeFilter?: string,
-): Promise<TripStopTime[]> {
+): Promise<TripsForDateResult> {
   const hasCalendar = await tableExists(db, 'calendar');
   const hasCalendarDates = await tableExists(db, 'calendar_dates');
   const conn = await db.connect();
   try {
     const dateNum = baseDateStr.replace(/-/g, '');
+    const dow = new Date(baseDateStr).getDay();
+    const dayCol = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][dow]!;
+
+    // feed 期間（calendar の start_date〜end_date 全体レンジ）を判定。
+    // 設定日が期間外、または期間が未定義（start/end が空）なら、日付範囲を無視して曜日のみで抽出する。
+    let usedWeekdayFallback = false;
+    if (hasCalendar) {
+      const rangeRes = await conn.query(
+        `SELECT MIN(CAST(start_date AS VARCHAR)) AS sd, MAX(CAST(end_date AS VARCHAR)) AS ed FROM calendar`,
+      );
+      const range = rangeRes.toArray()[0]?.toJSON() as { sd?: unknown; ed?: unknown } | undefined;
+      const sd = range?.sd == null ? '' : String(range.sd).trim();
+      const ed = range?.ed == null ? '' : String(range.ed).trim();
+      if (!sd || !ed || dateNum < sd || dateNum > ed) {
+        usedWeekdayFallback = true;
+      }
+    }
+
     let serviceFilter = '';
 
-    if (hasCalendar && hasCalendarDates) {
-      const dow = new Date(baseDateStr).getDay();
-      const dayCol = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][dow]!;
+    if (usedWeekdayFallback) {
+      // feed 期間外 / 未定義: 日付範囲と calendar_dates 例外を無視し、曜日一致のみで抽出
+      serviceFilter = `
+        AND CAST(t.service_id AS VARCHAR) IN (
+          SELECT CAST(service_id AS VARCHAR) FROM calendar WHERE ${dayCol} = 1
+        )
+      `;
+    } else if (hasCalendar && hasCalendarDates) {
       serviceFilter = `
         AND (
           (CAST(t.service_id AS VARCHAR) IN (
@@ -379,8 +408,6 @@ export async function queryTripsForDate(
         )
       `;
     } else if (hasCalendar) {
-      const dow = new Date(baseDateStr).getDay();
-      const dayCol = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][dow]!;
       serviceFilter = `
         AND CAST(t.service_id AS VARCHAR) IN (
           SELECT CAST(service_id AS VARCHAR) FROM calendar
@@ -425,7 +452,8 @@ export async function queryTripsForDate(
       WHERE 1=1 ${serviceFilter} ${routeCondition}
       ORDER BY t.trip_id, st.stop_sequence
     `);
-    return result.toArray().map(r => coerceBigInts(r.toJSON() as Record<string, unknown>) as unknown as TripStopTime);
+    const trips = result.toArray().map(r => coerceBigInts(r.toJSON() as Record<string, unknown>) as unknown as TripStopTime);
+    return { trips, usedWeekdayFallback };
   } finally {
     await conn.close();
   }

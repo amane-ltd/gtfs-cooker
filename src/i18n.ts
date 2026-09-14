@@ -96,6 +96,8 @@ const en = {
   'log.generating': (layer: string) => `Generating ${layer} layer...`,
   'log.features': (layer: string, count: number) => `${layer}: ${count} features`,
   'log.noBaseDate': 'trips: Base date not set',
+  'log.animationWeekdayFallback': (date: string) =>
+    `animation: ${date} is outside the feed service period (or the period is undefined). Falling back to day-of-week selection.`,
   'log.genComplete': 'Generation complete',
   'log.genError': (msg: string) => `Generation error: ${msg}`,
 
@@ -269,6 +271,8 @@ const ja: Dict = {
   'log.generating': (layer: string) => `${layer} レイヤーを生成中...`,
   'log.features': (layer: string, count: number) => `${layer}: ${count} フィーチャー`,
   'log.noBaseDate': 'trips: 基準日が未設定です',
+  'log.animationWeekdayFallback': (date: string) =>
+    `animation: ${date} は feed の運行期間外（または期間が未定義）です。曜日ベースで抽出しました。`,
   'log.genComplete': '生成完了',
   'log.genError': (msg: string) => `生成エラー: ${msg}`,
 

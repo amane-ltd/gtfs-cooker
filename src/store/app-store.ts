@@ -760,9 +760,12 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (!state.animationBaseDate) {
           addLog('warn', t('log.noBaseDate'));
         } else {
-          const stopTimes = await queryTripsForDate(
+          const { trips: stopTimes, usedWeekdayFallback } = await queryTripsForDate(
             db, state.animationBaseDate, state.animationRouteFilter || undefined,
           );
+          if (usedWeekdayFallback) {
+            addLog('warn', tf('log.animationWeekdayFallback', state.animationBaseDate));
+          }
           const hasShapesForTrips = await tableExists(db, 'shapes');
           const tripShapePoints = hasShapesForTrips ? await queryShapePoints(db) : [];
           results.animation = buildAnimationGeoJSON(stopTimes, state.animationBaseDate, props, coordinatePrecision, tripShapePoints);
