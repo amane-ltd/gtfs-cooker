@@ -185,6 +185,15 @@ const en = {
   'log.joinComplete': (matched: number, unmatched: number, covStops: number, covRoutes: number) =>
     `Join: ${matched} matched, ${unmatched} unmatched | stops ${covStops}%, routes ${covRoutes}%`,
   'log.ridershipCleared': 'Ridership data cleared',
+
+  'login.prompt': 'This tool is available to authorized users only. Enter the access password to continue.',
+  'login.password': 'Password',
+  'login.submit': 'Enter',
+  'login.checking': 'Checking...',
+  'login.error': 'Incorrect password.',
+  'login.notConfigured': 'The access password is not configured. Please contact the administrator.',
+  'login.insecureContext': 'Password verification requires a secure context (https or localhost).',
+  'login.signOut': 'Sign out',
 } as const;
 
 type Dict = { [K in keyof typeof en]: (typeof en)[K] extends (...args: infer A) => string ? (...args: A) => string : string };
@@ -360,6 +369,15 @@ const ja: Dict = {
   'log.joinComplete': (matched: number, unmatched: number, covStops: number, covRoutes: number) =>
     `結合: ${matched}マッチ, ${unmatched}未マッチ | 停留所${covStops}%, 路線${covRoutes}%`,
   'log.ridershipCleared': '乗降実績データをクリアしました',
+
+  'login.prompt': 'このツールは限定公開です。アクセス用のパスワードを入力してください。',
+  'login.password': 'パスワード',
+  'login.submit': '入室',
+  'login.checking': '確認中...',
+  'login.error': 'パスワードが違います。',
+  'login.notConfigured': 'アクセスパスワードが設定されていません。管理者にお問い合わせください。',
+  'login.insecureContext': 'パスワードの検証には secure context (https または localhost) が必要です。',
+  'login.signOut': 'ログアウト',
 };
 
 const dictionaries = { en, ja } as const;

@@ -26,6 +26,17 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      - name: Derive access password hash
+        env:
+          ACCESS_PASSWORD: ${{ secrets.ACCESS_PASSWORD }}
+        run: |
+          if [ -z "$ACCESS_PASSWORD" ]; then
+            echo "::error::ACCESS_PASSWORD secret is not set. Set it in repository settings, or the site would deploy without the access gate."
+            exit 1
+          fi
+          echo "VITE_ACCESS_PW_HASH=$(node scripts/hash-password.mjs)" >> "$GITHUB_ENV"
+
       - run: npm run build
       - run: npm run docs:build
       - run: cp -r dist-docs dist/docs

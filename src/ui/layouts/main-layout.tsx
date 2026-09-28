@@ -9,6 +9,8 @@ import { MapPreview } from '../components/map-preview';
 import { LogPanel } from '../components/log-panel';
 import { ProgressBar } from '../components/progress-bar';
 import { downloadAll } from '../../lib/download';
+import { PW_HASH } from '../../auth/password';
+import { clearAuthorization } from '../../auth/session';
 
 function Section({ title, defaultOpen, children }: { title: string; defaultOpen?: boolean; children: React.ReactNode }) {
   const [open, setOpen] = useState(defaultOpen ?? false);
@@ -77,6 +79,15 @@ export function MainLayout() {
               >
                 <span style={{ fontSize: 11, fontWeight: 600 }}>{is3D ? '3D' : '2D'}</span>
               </button>
+              {PW_HASH && (
+                <button
+                  className="sidebar-toggle"
+                  onClick={() => { clearAuthorization(); location.reload(); }}
+                  title={t('login.signOut')}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>logout</span>
+                </button>
+              )}
               <button className="sidebar-toggle" onClick={() => setSidebarOpen(false)}>
                 <span className="material-symbols-outlined">chevron_left</span>
               </button>

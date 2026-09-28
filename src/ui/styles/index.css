@@ -417,6 +417,7 @@ input[type='radio'] {
 .field input[type='text'],
 .field input[type='date'],
 .field input[type='number'],
+.field input[type='password'],
 .field select {
   width: 100%;
   padding: 4px 10px;
@@ -1335,4 +1336,54 @@ input[type='radio'] {
 
 .feed-range-warn-note {
   color: #f1c40f;
+}
+
+/* ── Login Gate ──────────────────────────────── */
+
+.login-gate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  padding: 16px;
+  background: var(--color-bg);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 320px;
+  padding: 20px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 2px;
+}
+
+.login-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.login-header h1 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text-strong);
+  letter-spacing: 0.2px;
+}
+
+.login-prompt {
+  margin-bottom: 14px;
+  color: var(--color-text);
+}
+
+.login-error {
+  margin: 8px 0 0;
+  color: var(--color-error);
+}
+
+.login-submit {
+  width: 100%;
+  margin-top: 14px;
 }
