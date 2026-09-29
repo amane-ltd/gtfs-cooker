@@ -193,6 +193,7 @@ const en = {
   'login.error': 'Incorrect password.',
   'login.notConfigured': 'The access password is not configured. Please contact the administrator.',
   'login.insecureContext': 'Password verification requires a secure context (https or localhost).',
+  'login.contact': 'For access requests, please contact us.',
   'login.signOut': 'Sign out',
 } as const;
 
@@ -377,6 +378,7 @@ const ja: Dict = {
   'login.error': 'パスワードが違います。',
   'login.notConfigured': 'アクセスパスワードが設定されていません。管理者にお問い合わせください。',
   'login.insecureContext': 'パスワードの検証には secure context (https または localhost) が必要です。',
+  'login.contact': 'アクセス権のご依頼はお問い合わせください',
   'login.signOut': 'ログアウト',
 };
 

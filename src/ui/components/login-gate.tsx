@@ -4,6 +4,9 @@ import { useT } from '../hooks/use-t';
 import { PW_HASH, verifyPassword, InsecureContextError } from '../../auth/password';
 import { isAuthorized, saveAuthorization } from '../../auth/session';
 
+/** 問い合わせ先メールアドレス。 */
+const CONTACT_EMAIL = 'info@amane.ltd';
+
 /** パスワードによる簡易アクセスゲート。VITE_ACCESS_PW_HASH 未設定時は開発サーバーでのみ素通しする。 */
 export function LoginGate({ children }: { children: ReactNode }) {
   const { t } = useT();
@@ -73,6 +76,16 @@ export function LoginGate({ children }: { children: ReactNode }) {
         ) : (
           <p className="login-error">{t('login.notConfigured')}</p>
         )}
+
+        <p className="login-contact">
+          {t('login.contact')}
+          <br />
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+        </p>
+
+        <div className="login-footer">
+          <a href="https://amane.ltd/" target="_blank" rel="noopener noreferrer">{t('distributor.name')}</a>
+        </div>
       </div>
     </div>
   );
